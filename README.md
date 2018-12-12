@@ -12,14 +12,14 @@ The library has the following key features:
 * Abstracted "Surface" type represents traditional curses Windows, will fully automatic re-rendering on update, including visibility computation (automatic layering).
 * The Curses package does not use allocators anywhere (however the (n)curses library itself likely does use allocate from the heap). All objects are stack allocated, unless explicitly created with a user-defined allocator.
 
-#State of Release
+# State of Release
 This package is currently in **pre-release alpha** and is still very much under development. 
 
 Core functionality (Surface primitives) is complete and working. Work on higher-level UI abstractions is underway.
 
 **The interface is subject to breaking changes until further notice**
 
-##Open issues
+## Open issues
 * Gnome terminal can't handle Set_Background with a Colored_Cursor. Artifacts appear during refresh. Almost all other tested terminals work fine (xterm, uxrvt, konsole).
 
 ## Work queue
