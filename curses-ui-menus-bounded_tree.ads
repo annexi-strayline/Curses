@@ -49,7 +49,6 @@
 -- rendered
 
 with Ada.Containers;
-with Ada.Containers.Bounded_Multiway_Trees;
 
 generic
    type Menu_Item is new Menu_Item_Type with private;
