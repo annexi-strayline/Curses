@@ -198,7 +198,7 @@ package Curses.UI.Menus.Bounded_Tree is
    ---------------
    -- Menu_Tree --
    ---------------
-   type Menu_Tree (Capacity: Ada.Containers.Count_Type) 
+   type Menu_Tree (Capacity: Positive) 
       is tagged limited private;
    -- The Menu_Tree object contains all Menu_Branches. All operations on the
    -- tree are focused on the individual Submenu "branches".
@@ -209,28 +209,29 @@ package Curses.UI.Menus.Bounded_Tree is
 
    
 private
+   ----------------------
+   -- Generation_Stamp --
+   ----------------------
+   type Generation_Stamp is mod 2**64;
+   -- The Generation_Stamp is a value that is incremented for each
+   -- Accounted_Item on a Tree, and is used to verify that a Cursor is valid.
    
    --------------------
    -- Accounted_Item --
    --------------------
-   type Accounted_Item is new Menu_Item with
+   subtype Node_Index is Positive;
+   
+   type Accounted_Item is
       record
-         Allocated : Boolean;
-         References: Positive;
+         Generation: Generation_Stamp;
+         
+         Next      : Node_Index;
+         Child     : Node_Index;
       end record;
    -- Accounted_Item is the actual unit of storage in the Tree, and allows
    -- for the validation of Cursors, and the explicit protection from
    -- the deletion of elements which have multiple Cursors refering to the
-   -- item. 
-   
-   package Internal_Trees is new 
-     Ada.Containers.Bounded_Multiway_Trees (Accounted_Item);
-   
-   use type Internal_Trees.Tree;
-   
-   subtype Internal_Cursor is Internal_Trees.Cursor;
-   No_Element: Internal_Cursor renames Internal_Trees.No_Element;
-   
+   -- item.
    
    -----------------
    -- Menu_Branch --
@@ -238,7 +239,8 @@ private
    type Menu_Branch (Tree: not null access Menu_Tree) 
       is limited new Menu_Type with
       record
-        Parent: Internal_Cursor;
+         Node: Node_Index;
+         -- The node which represents the root of a branch
       end record;
    
    not overriding
@@ -256,11 +258,7 @@ private
    type Menu_Cursor is new Menu_Cursor_Type with
       record
          Tree  : Menu_Tree_Access := null;
-         Branch: Internal_Cursor  := No_Element;
-         -- This is the "Parent" node for the Branch.
-         -- For the Menu_Branch type, this is the value of the Parent component.
-         
-         Item  : Internal_Cursor  := No_Element;
+         Item  : Node_Index       := 1;
       end record;
    
    overriding
