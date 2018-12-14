@@ -18,7 +18,7 @@ begin
                        Proposed_Extents => (Row => 3, Column => 40));
       
       Input_Char: Control_Character;
-      -- This will be centered on the screen, of size 10x40
+      -- This will be centered on the screen, of size 3x40
       
       Fill_Cursor: Cursor := (Style    => (Inverted => True, others => <>),
                               others   => <>);

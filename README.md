@@ -4,12 +4,12 @@ The Curses library provides a very high-level **thick** binding for the common "
 
 The library has the following key features:
 * **Fully task-safe**, and allows for concurrent interface driving
-* Full color support for xterm and xterm-256color, including pallet changing ability (though this currently rarely supported by terminal emulators in the wild)
+* Full color support for xterm and xterm-256color, including palette changing ability (though this rarely supported by terminal emulators in the wild)
 * Non signal-based, synchronous dynamic terminal resizing support with hooks
 * Designed to drive multiple terminals simultaneously
   * Includes a unified color space shared amongst all terminals
   * Supports cross-terminal Surface (window, pad) transcription
-* Abstracted "Surface" type represents traditional curses Windows, will fully automatic re-rendering on update, including visibility computation (automatic layering).
+* Abstracted "Surface" type represents traditional curses Windows, with fully automatic re-rendering on update, including visibility computation (automatic layering).
 * The Curses package does not use allocators anywhere (however the (n)curses library itself likely does use allocate from the heap). All objects are stack allocated, unless explicitly created with a user-defined allocator.
 
 # State of Release
@@ -58,7 +58,7 @@ begin
                        Proposed_Extents => (Row => 3, Column => 40));
       
       Input_Char: Control_Character;
-      -- This will be centered on the screen, of size 10x40
+      -- This will be centered on the screen, of size 3x40
       
       Fill_Cursor: Cursor := (Style    => (Inverted => True, others => <>),
                               others   => <>);
