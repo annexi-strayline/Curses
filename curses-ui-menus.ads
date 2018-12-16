@@ -42,12 +42,12 @@
 ------------------------------------------------------------------------------
 
 -- This package is a bit essoteric. The goal is to provide a general interface
--- through which a user can provide their own specific Menu generator which will
--- be fully compatible with the Menu rendering processes in the various child
--- packages.
+-- through which a user can provide their own specific Menu generator which
+-- will be fully compatible with the Menu rendering processes in the various
+-- child packages.
 --
--- This interface is also used to implement some included stanard Menu authoring
--- generic packages that to provide Bounded and Unbounded menu trees
+-- This interface is also used to implement some included stanard Menu
+-- authoring generic packages that to provide Bounded and Unbounded menu trees
 
 with Ada.Iterator_Interfaces;
 with Ada.Finalization;        use Ada.Finalization;
@@ -56,34 +56,6 @@ package Curses.UI.Menus is
    
    pragma Preelaborate (Menus);
    
-   ----------------------
-   -- Menu_Cursor_Type --
-   ----------------------
-   type Menu_Cursor_Type is new Controlled with null record;
-   -- Menu_Cursor_Types are Controlled to allow for safe implementation of
-   -- the underlying tree containers, by enabling "reference counts".
-   -- The default generic menu tree containers provided as children to this
-   -- package employ such methods to exclude erronious execution due to
-   -- "invalid cursors" which may arrise through erronious copying of cursors.
-   
-   function Has_Element (Position: Menu_Cursor_Type) return Boolean
-     is (False);
-     
-   function Class_Has_Element (Position: Menu_Cursor_Type'Class)
-                              return Boolean
-     is (Position.Has_Element);
-     
-     
-   -- Null_Menu_Cursor --
-   ----------------------
-   Null_Menu_Cursor: constant Menu_Cursor_Type 
-     := (Controlled with others => <>);
-   -- May be returned from any Menu iterator which has no Menu_Items. As seen
-   -- above, Has_Element will always return False on all objects of the root
-   -- Menu_Cursor_Type type. Here is provided a single preelaborated constant
-   -- object which may be returned at will.
-   
-   
    --------------------
    -- Menu_Item_Type --
    --------------------
@@ -91,29 +63,48 @@ package Curses.UI.Menus is
    -- Menu_Item_Types, or a reference thereof, provides the necessary
    -- information for the rending of the item in a menu.
    
-   function  Label_Size (Item: Menu_Item_Type) return Natural is abstract;
-   -- Shall return the length of the Label text
-   
-   procedure Get_Label (Item : in     Menu_Item_Type;
-                        Value:    out String;
-                        Key  :    out Natural) is abstract;
-   -- Called with an expected size determined by an earlier call to Label_Size.
-   -- Label shall accept any Value size. If the size of Value is larger than the
-   -- label, Label shall fill the remaining with Spaces. Otherwise, Label should
-   -- be truncaated. Value may define a null string.
+   procedure Render_Label (Item    : in out Menu_Item_Type;
+                           Canvas  : in out Surface'Class;
+                           Selected: in     Boolean) is abstract;
+   -- Renders the label of Item to Canvas.
    --
-   -- If a keyboard quick key is defined for the Item, Key shall be non-zero,
-   -- and shall be an index into Value which selects the Key. Othwerise, Key
-   -- shall be set to Zero.
+   -- Canvas shall be a Surface that is singally and wholy dedicated to the
+   -- label of Item, and shall not include any borders rendered by the menu
+   -- subsystem itself. This is typically acheived through a Frame.
    --
-   -- A call to Label when Label_Size is zero shall be assumed to behave like a
-   -- null procedure, with Value and Key left uninitialized.
+   -- The Canva's Current_Cursor shall be set by the caller to be at the
+   -- correct position, and with an appropriate style. The style of 
+   -- Canvas.Current_Cursor can be used as a reference, but can also be ignored
+   -- if more elaborate styling is needed. It is provided for convenience and
+   -- to support athetic conformity. When Selected is True,
+   -- Canvas.Current_Cursor shall also reflect the subsystem's suggestion on
+   -- how a selected item should be rendered, and could, for example, have the
+   -- Inverted style option set to True.
+   --
+   -- Selected is True if the menu subsystem has decided that Item is currently
+   -- selected, and the rendering should reflect as much.
+   --
+   -- For basic rendering, Render_Label can often ignore "Selected", as the
+   -- menu subsystem will provide the appropriate Theme cursor, and can thus
+   -- use exactly the same code to handle both states.
    
-   function  Enabled (Item: Menu_Item_Type) return Boolean is abstract;
-   -- Shall return True if Item is selectable.
+   function  Available (Item: Menu_Item_Type) return Boolean is abstract;
+   -- Shall return True if Item is selectable (ie. False is "grayed-out").
    
-   function  Toggled (Item: Menu_Item_Type) return Boolean is abstract;
-   -- Shall return True if the Item is stateful, and is currently toggled (On)
+   
+   type After_Execute_Directive is 
+   -- Returned from Execute, tells the menu subsystem what to do following
+   -- Execution
+     (Update,      -- Re-render Item, but keep the menu open
+     Regenerate,   -- Re-render the entire Menu tree
+     Close);       -- Close the Menu
+     
+   function  Execute (Item: in out Menu_Item_Type)
+                     return After_Execute_Directive is abstract;
+   -- Invoked by the menu subsystem when the user selects the particular Item.
+   -- If Re_Render is set to True upon return, the menu is not closed, and Item
+   -- is re-rendered in-place (though a subsequent call to Item.Render_Label),
+   -- otherwise the entire menu tree is closed
    
    -- Submenu --
    -------------
@@ -125,26 +116,44 @@ package Curses.UI.Menus is
    -- If Item does not have an associated Submenu, it shall return the
    -- Null_Submenu predefined reference type constant declared in this package
    
-   -- Reference Types --
-   ---------------------
-   type Menu_Item_Reference_Type
-     (Ref: not null access Menu_Item_Type'Class)
-      is null record
-      with Implicit_Dereference => Ref;
+   ---------------
+   -- Menu_Type --
+   ---------------
+   
+   -- Cursor Type --
+   -----------------
+   type Menu_Cursor_Type is new Controlled with null record;
+   -- Making this a Controlled type allows for copies of Cursors to
+   -- be tracked via some kind of "reference count", which can be used
+   -- to prevent deletion of items which are being referenced by a
+   -- cursor.
+   --
+   -- Obviously this does not save us from the user saving a reference
+   -- type obtained via index, but that is really bad form anyways
+   -- (totally defeats the purpose of user-defined indexing)
+   
+   function Has_Element (Position: Menu_Cursor_Type) return Boolean
+     is (False);
      
-   type Menu_Item_Constant_Reference_Type 
-     (Ref: not null access constant Menu_Item_Type'Class)
-      is null record
-      with Implicit_Dereference => Ref;
-      
+   function Class_Has_Element (Position: Menu_Cursor_Type'Class)
+                              return Boolean
+     is (Position.Has_Element);
+     
+   Null_Menu_Cursor: constant Menu_Cursor_Type 
+     := (Controlled with null record);
+   -- May be returned from any Menu iterator which has no Menu_Items. As seen
+   -- above, Has_Element will always return False on all objects of the root
+   -- Menu_Cursor_Type type. Here is provided a single preelaborated constant
+   -- object which may be returned at will.
+   
+   
    -- Iterators --
    ---------------
    package Menu_Iterators is new Ada.Iterator_Interfaces 
      (Cursor      => Menu_Cursor_Type'Class,
       Has_Element => Class_Has_Element);
    
-   -- Null_Iterator --
-   -------------------
+   
    type Null_Iterator_Type is new Menu_Iterators.Forward_Iterator
      with null record;
    
@@ -160,14 +169,17 @@ package Curses.UI.Menus is
    Null_Iterator: constant Null_Iterator_Type := (others => <>);
    
    
-   ---------------
-   -- Menu_Type --
-   ---------------
+   -- Reference Types --
+   ---------------------
+   type Menu_Item_Reference_Type (Ref: not null access Menu_Item_Type'Class) is
+     null record
+   with Implicit_Dereference => Ref;
+   
+   ----------------------------------------
    type Menu_Type is tagged limited null record
-     with Constant_Indexing => Constant_Index,
-          Variable_Indexing => Index,
-          Default_Iterator  => Iterate,
-          Iterator_Element  => Menu_Item_Type'Class;
+   with Variable_Indexing => Index,
+        Default_Iterator  => Iterate,
+        Iterator_Element  => Menu_Item_Type'Class;
    -- Menu_Type container types represent a single linear vector of 
    -- Menu_Item_Type'Class objects.
      
@@ -175,11 +187,6 @@ package Curses.UI.Menus is
                              Cursor: Menu_Cursor_Type'Class) 
                             return Menu_Item_Reference_Type;
                        
-   function  Constant_Index (Menu  : Menu_Type;
-                             Cursor: Menu_Cursor_Type'Class)
-                            return Menu_Item_Constant_Reference_Type;
-      
-     
    function  Iterate        (Menu: Menu_Type) 
                             return Menu_Iterators.Forward_Iterator'Class
      is (Null_Iterator);
@@ -203,23 +210,20 @@ package Curses.UI.Menus is
    type Null_Menu_Item_Type is new Menu_Item_Type with null record;
    
    overriding
-   function Label_Size (Item: Null_Menu_Item_Type) return Natural 
-     is (0);
-     
-   overriding
-   procedure Get_Label (Item : in     Null_Menu_Item_Type;
-                        Value:    out String;
-                        Key  :    out Natural) 
+   procedure Render_Label (Item    : in out Null_Menu_Item_Type;
+                           Canvas  : in out Surface'Class;
+                           Selected: in     Boolean)
      is null;
-     
+                           
    overriding
-   function Enabled  (Item: Null_Menu_Item_Type) return Boolean 
+   function Available (Item: Null_Menu_Item_Type) return Boolean 
      is (False);
    
-   overriding 
-   function Toggled  (Item: Null_Menu_Item_Type) return Boolean
-     is (False);
-     
+   overriding
+   function  Execute (Item: in out Null_Menu_Item_Type)
+                     return After_Execute_Directive
+     is (Close);
+   
    overriding
    function  Submenu (Item: Null_Menu_Item_Type) return Submenu_Type
      is (Null_Submenu);
@@ -228,12 +232,7 @@ package Curses.UI.Menus is
    -- Giving an access to this object is always safe since it contains no data,
    -- and has the same lifetime as the partition.
    
-   Null_Menu_Reference:
-     constant Menu_Item_Reference_Type
-     := (Ref => Null_Menu_Item'Access);
-   
-   Null_Menu_Constant_Reference:
-     constant Menu_Item_Constant_Reference_Type
+   Null_Menu_Reference: constant Menu_Item_Reference_Type
      := (Ref => Null_Menu_Item'Access);
    
    
@@ -244,16 +243,10 @@ package Curses.UI.Menus is
    --------------------
    -- Menu_Tree_Type --
    --------------------
-   function  Index          (Menu  : Menu_Type; 
-                             Cursor: Menu_Cursor_Type'Class) 
-                            return Menu_Item_Reference_Type
-      is (Null_Menu_Reference);
-      
-   function  Constant_Index (Menu  : Menu_Type;
-                             Cursor: Menu_Cursor_Type'Class)
-                            return Menu_Item_Constant_Reference_Type
-      is (Null_Menu_Constant_Reference);
-   
+   function  Index (Menu  : Menu_Type; 
+                    Cursor: Menu_Cursor_Type'Class) 
+                   return Menu_Item_Reference_Type
+     is (Null_Menu_Reference);
 
       
 end Curses.UI.Menus;
