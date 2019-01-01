@@ -372,7 +372,9 @@ package body Curses.Binding.Terminals is
       
       -- For physical terminals (they still exist in the wild!), this ioctl
       -- has a tendency to return zero. When that happens, we assume a standard
-      -- 80x24 size
+      -- 80x24 size. When an error is encountered, ws_row and ws_col are set to
+      -- -1, in which case we make the same assumption, since this is a bit
+      -- early to call it a day.
       if ws_row <= 0 then
          ws_row := 24;
       end if;
