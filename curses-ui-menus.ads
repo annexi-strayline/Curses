@@ -59,9 +59,13 @@ package Curses.UI.Menus is
    --------------------
    -- Menu_Item_Type --
    --------------------
-   type Menu_Item_Type is interface;
+   type Menu_Item_Type is limited interface;
    -- Menu_Item_Types, or a reference thereof, provides the necessary
    -- information for the rending of the item in a menu.
+   --
+   -- Making this a limited type, along with the design choices of the
+   -- actual interface, allows for some interesting possbilities. One specific
+   -- use-case is having Menu_Items_Types which actually are or contain tasks.
    
    procedure Render_Label (Item    : in out Menu_Item_Type;
                            Canvas  : in out Surface'Class;
@@ -88,19 +92,18 @@ package Curses.UI.Menus is
    -- menu subsystem will provide the appropriate Theme cursor, and can thus
    -- use exactly the same code to handle both states.
    
-   function  Available (Item: Menu_Item_Type) return Boolean is abstract;
+   function Available (Item: Menu_Item_Type) return Boolean is abstract;
    -- Shall return True if Item is selectable (ie. False is "grayed-out").
-   
    
    type After_Execute_Directive is 
    -- Returned from Execute, tells the menu subsystem what to do following
    -- Execution
      (Update,      -- Re-render Item, but keep the menu open
-     Regenerate,   -- Re-render the entire Menu tree
-     Close);       -- Close the Menu
+      Regenerate,  -- Re-render the entire Menu tree
+      Close);      -- Close the Menu
      
-   function  Execute (Item: in out Menu_Item_Type)
-                     return After_Execute_Directive is abstract;
+   function Execute (Item: in out Menu_Item_Type)
+                    return After_Execute_Directive is abstract;
    -- Invoked by the menu subsystem when the user selects the particular Item.
    -- If Re_Render is set to True upon return, the menu is not closed, and Item
    -- is re-rendered in-place (though a subsequent call to Item.Render_Label),
@@ -109,10 +112,9 @@ package Curses.UI.Menus is
    -- Submenu --
    -------------
    type Menu_Type is tagged;
-   type Submenu_Type (Submenu: not null access Menu_Type'Class) is null record
-     with Implicit_Dereference => Submenu;
      
-   function  Submenu (Item: Menu_Item_Type) return Submenu_Type is abstract;
+   function  Submenu (Item: in out Menu_Item_Type) return Menu_Type'Class
+     is abstract;
    -- If Item does not have an associated Submenu, it shall return the
    -- Null_Submenu predefined reference type constant declared in this package
    
@@ -175,11 +177,12 @@ package Curses.UI.Menus is
      null record
    with Implicit_Dereference => Ref;
    
+   
    ----------------------------------------
-   type Menu_Type is tagged limited null record
-   with Variable_Indexing => Index,
-        Default_Iterator  => Iterate,
-        Iterator_Element  => Menu_Item_Type'Class;
+   type Menu_Type is new Controlled with null record
+     with Variable_Indexing => Index,
+          Default_Iterator  => Iterate,
+          Iterator_Element  => Menu_Item_Type'Class;
    -- Menu_Type container types represent a single linear vector of 
    -- Menu_Item_Type'Class objects.
      
@@ -192,17 +195,18 @@ package Curses.UI.Menus is
      is (Null_Iterator);
      
      
+   function  Item_Count (Menu: Menu_Type) return Natural is (0);
+   -- Returns the current number of items on Menu (not including any Submenus)
+     
    --
    -- Subjucate Declarations
    -- 
      
-   -- Null_Submenu --
-   ------------------
-   Null_Submenu_Actual: aliased  Menu_Type := (others => <>);
-   Null_Submenu       : constant Submenu_Type
-     := (Submenu => Null_Submenu_Actual'Access); 
-   -- Noting that Menu_Type is a null record, so access is always arbitrary, as
-   -- nothing can be read or written.
+   -- Null_Menu --
+   ---------------
+   Null_Menu: constant Menu_Type := (Controlled with others => <>);
+   -- An actual object which may be returned from Menu_Item.Submenu to indicate
+   -- that there exists no submenu
    
    
    -- Null_Menu_Item_Type --
@@ -225,8 +229,8 @@ package Curses.UI.Menus is
      is (Close);
    
    overriding
-   function  Submenu (Item: Null_Menu_Item_Type) return Submenu_Type
-     is (Null_Submenu);
+   function  Submenu (Item: in out Null_Menu_Item_Type) return Menu_Type'Class
+     is (Null_Menu);
    
    Null_Menu_Item: aliased Null_Menu_Item_Type := (others => <>);
    -- Giving an access to this object is always safe since it contains no data,
@@ -240,9 +244,9 @@ package Curses.UI.Menus is
    -- Completions
    --
    
-   --------------------
-   -- Menu_Tree_Type --
-   --------------------
+   ---------------
+   -- Menu_Type --
+   ---------------
    function  Index (Menu  : Menu_Type; 
                     Cursor: Menu_Cursor_Type'Class) 
                    return Menu_Item_Reference_Type
