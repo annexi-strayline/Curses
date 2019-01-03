@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -204,6 +204,10 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       procedure Finalize (Cursor: in out Menu_Cursor);
       
       overriding
+      function Has_Element (Position: Menu_Cursor) return Boolean
+        with Inline;
+      
+      overriding
       function On_Tree (Position: in     Menu_Cursor;
                         Tree    : in out Standard_Tree'Class)
                        return Boolean
@@ -355,6 +359,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          record
             Controller: Tree_Controller;
             Pool      : Item_Pool (Param);
+            Main_Menu : aliased Menu_Item;
          end record;
       
       
@@ -364,6 +369,11 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       
       -- Menu_Cursor --
       -----------------
+      
+      overriding
+      function Has_Element (Position: Menu_Cursor) return Boolean
+        is (Position.Tree /= null and then Index /= Null_Index);
+      
       overriding
       function On_Tree (Position: in     Menu_Cursor;
                         Tree    : in out Standard_Tree'Class)
