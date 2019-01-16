@@ -163,23 +163,25 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       
       with function Allocate (Pool: in out Item_Pool)
                              return GTE.Index_Type is <>;
+      -- Allocate must be task-safe
       
-      with procedure Free (Pool: in out Item_Pool) is <>;
-      
-      -- Allocate, Free, must be task-safe.
+      with procedure Free (Pool : in out Item_Pool;
+                           Index: in     GTE.Index_Type) is <>;
+      -- The implementation will guaruntee no further access to the item
+      -- referenced by Index after a call to Free, unless it is subsequently
+      -- returned by a later call to Allocate
       
       with procedure Modify
         (Pool  : in out Item_Pool;
          Index : in     GTE.Index_Type;
          Action: not null access procedure 
            (Item: aliased in out GTE.Tree_Element'Class)) is <>;
-      
       -- Modify will only be used to access GTE.Tree_Element.State,
       -- and so does not need to be made explicitly task-safe.
       
    package Generic_Menu_Tree is
    
-   use all type GTE.Tree_Element;
+      use all type GTE.Tree_Element;
    
       ---------------
       -- Menu_Item --
@@ -260,32 +262,29 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       
       overriding
       function Main_Menu (Tree: in out Menu_Tree)
-                         return Menu_Type'Class;
+                         return Menu_Type'Class
+        with Inline, Post => Main_Menu'Result in Menu_Branch'Class;
       
       overriding
-      function New_Item (Tree: in out Menu_Tree)
+      function New_Item (Tree: aliased in out Menu_Tree)
                         return Standard_Cursor'Class;
       
       overriding
-      function New_Submenu (Tree: in out Menu_Tree;
-                            Position: in Standard_Cursor'Class)
-                           return Menu_Type'Class;
-      
-      overriding
       procedure Delete (Tree    : in out Menu_Tree;
-                        Position: in out Standard_Cursor'Class);
+                        Position: in out Standard_Cursor'Class)
+        with Pre => Position in Menu_Cursor'Class;
       
       overriding
       procedure Append (Tree    : in out Menu_Tree;
                         Branch  : in out Menu_Type'Class;
                         Position: in     Standard_Cursor'Class)
-      with Pre => Branch in Menu_Branch'Class;
+        with Pre => Branch in Menu_Branch'Class;
       
       overriding
       procedure Prepend (Tree    : in out Menu_Tree;
                          Branch  : in out Menu_Type'Class;
                          Position: in     Standard_Cursor'Class)
-      with Pre => Branch in Menu_Branch'Class;
+        with Pre => Branch in Menu_Branch'Class;
       
       overriding
       procedure Insert_Before (Tree    : in out Menu_Tree;
@@ -369,7 +368,6 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       
       -- Menu_Cursor --
       -----------------
-      
       overriding
       function Has_Element (Position: Menu_Cursor) return Boolean
         is (Position.Tree /= null and then Index /= Null_Index);
@@ -394,6 +392,21 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
                        Cursor: Menu_Cursor_Type'Class) 
                       return Menu_Item_Reference_Type
         is (Menu.Tree.Index (Menu_Cursor (Cursor)));
+      
+      
+      overriding
+      function Main_Menu (Tree: in out Menu_Tree)
+                         return Menu_Type'Class
+        is (Menu_Branch'(Menu_Type with 
+                         Tree => Tree'Access, Index => Null_Index));
+      -- Remember that the Main_Menu of a given tree is a logical node. We use
+      -- a Menu_Branch with a Null_Index root to refer to the Main_Menu. As an
+      -- extra matter of convenience, we don't need to register references for
+      -- the Main_Menu, since it will always exist as long as the Tree exists,
+      -- and it cannot be deleted.
+      --
+      -- Though a Menu_Branch is functionally similar to a Menu_Cursor, unlike
+      -- a cursor, it can never be directly deleted.
       
    end Generic_Menu_Tree;
    
