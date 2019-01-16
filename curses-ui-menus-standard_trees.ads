@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -41,7 +41,11 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Ada.Containers;
+
 package Curses.UI.Menus.Standard_Trees with Preelaborate is
+   
+   exception Capacity_Error renames Ada.Containers.Capacity_Error;
    
    ---------------------
    -- Standard_Cursor --
@@ -89,23 +93,12 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    
    -- Allocation --
    ----------------
-   function New_Item (Tree: in out Standard_Tree)
+   function New_Item (Tree: aliased in out Standard_Tree)
      return Standard_Cursor'Class is abstract;
    -- Allocates a new Menu_Item from Tree, and returns a cursor referencing
    -- it. Newly allocated Items are not associated with a Branch. If the
    -- Item is not placed on a Branch, it will be Deleted when all referencing 
    -- Cursors have finalized.
-   
-   function New_Submenu (Tree: in out Standard_Tree;
-                         Position: in Standard_Cursor'Class)
-                        return Menu_Type'Class
-     is abstract
-     with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
-   -- Creates a new submenu associated with Item at Position. If the Item
-   -- already has a Submenu, a new reference to the existing submenu is
-   -- returned, otherwise a new submenu is created.
-   -- -- Explicit Raises --
-   -- *  Assertion_Erorr : Precondition violated
    
    procedure Delete (Tree    : in out Standard_Tree;
                      Position: in out Standard_Cursor'Class)
@@ -113,21 +106,26 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
      with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Deletes (deallocates) the Item at Position.
    --
-   -- If the Position donotes a Submenu, the Submenu is iterated-over, with
+   -- If the Position donotes a Submenu, the Submenu is iterated, with
    -- Delete invoked for each Item of the Submenu, and recursively for any
    -- Submenus of those Items
    --
-   -- All Items are checked for active references. If any active references are
-   -- found, except for the single reference denoting Position, Program_Error
-   -- will be raised.
+   -- The user shall never attempt to Delete an Item which is currently
+   -- referenced, or maintains a sub-tree of Items and Submenus which are also
+   -- currently referenced. All Items are checked for active references. If any
+   -- active references are found, except for the single reference denoting
+   -- Position, Program_Error will be raised. 
    --
-   -- If Assertion_Error or Program_Error are explicitly raised, the operation
-   -- is aborted without modifying Tree.
+   -- If the operation fails and Program_Error is raised, all reasonable
+   -- attempts are made to leave the Tree in a consistent state. If the Delete
+   -- only fails due to active references, the Tree is not affected.
    --
    -- -- Explicit Raises --
-   -- *  Assertion_Erorr : Precondition violated
-   -- *  Constraint_Error: Position denotes a sub-tree that contains active
-   --                      references that would be left dangling.
+   -- *  Assertion_Erorr: Precondition violated.
+   -- *  Program_Error  : The user has attempted to Delete an Item which is
+   --                     still referenced, or denotes a sub-tree which
+   --                     contains references
+   
    
    -- Manipulation --
    ------------------
@@ -139,7 +137,8 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    -- Appends Item to Branch. If Position denotes an Item on a different
    -- branch, the item is moved to Branch.
    -- -- Explicit Raises --
-   -- *  Assertion_Error: Precondition violated
+   -- *  Assertion_Error : Precondition violated
+   -- *  Constraint_Error: Branch does not belong to Tree.
    
    procedure Prepend (Tree    : in out Standard_Tree;
                       Branch  : in out Menu_Type'Class;
