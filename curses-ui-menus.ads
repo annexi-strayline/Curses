@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -116,7 +116,7 @@ package Curses.UI.Menus is
    function  Submenu (Item: in out Menu_Item_Type) return Menu_Type'Class
      is abstract;
    -- If Item does not have an associated Submenu, it shall return the
-   -- Null_Submenu predefined reference type constant declared in this package
+   -- Null_Submenu predefined constant declared in this package
    
    ---------------
    -- Menu_Type --

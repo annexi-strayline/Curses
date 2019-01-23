@@ -111,14 +111,13 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          -- Get or set the reference to the Element which is the parent of the
          -- branch on which this Element is located.
          
-         procedure Identity (Tree: not null Standard_Tree_Access;
+         
+         procedure Identity (Tree : not null Standard_Tree_Access;
                              Index: in Index_Type)
            with Pre => Index /= Null_Index;
          
-         function  Tree  return not null Standard_Tree_Access;
-         function  Index return Index_Type
-           with Post => Index'Result /= Null_Index;
-         
+         function  Tree  return Standard_Tree_Access;
+         function  Index return Index_Type;
          -- All newly allocated elements (through Standard_Tree.New_Item) shall
          -- set Identity by providing the element with a reference to the Tree
          -- on which it has membership, as well as its own Index values.
@@ -126,8 +125,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          -- This identity is required by Menu_Item_Type.Submenu
          --
          -- Tree and Index shall never be called on an element that has not
-         -- been properly configured with a call to Identity. Such an execution
-         -- indicates an implementation error.
+         -- been properly configured with a call to Identity.
          
       private
          Active    : Boolean              := False;
@@ -144,6 +142,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          
       end Element_State;
       
+      ----------------------------------------
       type Tree_Element is limited new Base_Item with
          record
             State: Element_State;
@@ -161,15 +160,23 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       type Pool_Parameter is (<>);
       type Item_Pool (Param: Pool_Parameter) is limited private;
       
-      with function Allocate (Pool: in out Item_Pool)
+      with function  Allocate (Pool: in out Item_Pool)
                              return GTE.Index_Type is <>;
-      -- Allocate must be task-safe
       
       with procedure Free (Pool : in out Item_Pool;
                            Index: in     GTE.Index_Type) is <>;
       -- The implementation will guaruntee no further access to the item
       -- referenced by Index after a call to Free, unless it is subsequently
       -- returned by a later call to Allocate
+      --
+      -- The implementer shall not modify any other Items of Index as a result
+      -- of calling Free. Tree manipulation logic handles de-linking before
+      -- Freeing
+      --
+      -- Freeing a Null_Index value shall have no effect.
+      
+      -- ** Allocate and Free do not need to be task-safe, All calls to
+      -- Allocate or Free from a Tree object will be serialized.
       
       with procedure Modify
         (Pool  : in out Item_Pool;
@@ -277,19 +284,19 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       overriding
       procedure Append (Tree    : in out Menu_Tree;
                         Branch  : in out Menu_Type'Class;
-                        Position: in     Standard_Cursor'Class)
+                        Position: in out Standard_Cursor'Class)
         with Pre => Branch in Menu_Branch'Class;
       
       overriding
       procedure Prepend (Tree    : in out Menu_Tree;
                          Branch  : in out Menu_Type'Class;
-                         Position: in     Standard_Cursor'Class)
+                         Position: in out Standard_Cursor'Class)
         with Pre => Branch in Menu_Branch'Class;
       
       overriding
       procedure Insert_Before (Tree    : in out Menu_Tree;
                                Before  : in     Standard_Cursor'Class;
-                               Position: in     Standard_Cursor'Class);
+                               Position: in out Standard_Cursor'Class);
       -- Note that the class-wide preconditions call on On_Tree for each
       -- Cursor, which implicitly will verify that Before and Position are
       -- Menu_Cursor'Class via On_Tree's precondition
@@ -302,7 +309,6 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
    private
       
       use type GTE.Index_Type;
-      
       subtype Index_Type is GTE.Index_Type;
       
       Null_Index: Index_Type renames GTE.Null_Index;
@@ -333,12 +339,20 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       ---------------
       -- Menu_Tree --
       ---------------
-      protected type Tree_Controller is
+      
+      type Pool_Access is access all Item_Pool
+        with Storage_Size => 0;
+      
+      -- Tree_Controller --
+      ---------------------
+      -- The tree controller is used to ensure specific operations which
+      -- modify the tree are executed atomically.
+      protected type Tree_Controller (Our_Pool: not null Pool_Access) is
          
          -- Element Allocation --
          ------------------------
-         procedure Allocate (Index: out Index_Type);
-         procedure Free     (Index: in  Index_Type);
+         procedure Allocate_Index (Index: out Index_Type);
+         procedure Free_Index     (Index: in  Index_Type);
          
          -- Element Splicing --
          ----------------------
@@ -350,14 +364,39 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          -- Relocates From to Before/After, manipulating the links accordingly.
          -- If Item is already on a Branch, it is Extracted first.
          
+         
+         -- Submenu Operations
+         
+         procedure First_In_Submenu (Root, Item: in Index_Type);
+         -- Atomic operation used by Menu_Tree.Append and .Prepend
+         --
+         -- Atomically installs/inserts Item as the first item for the
+         -- Submenu Branch rooted at Root. 
+         --
+         -- If Item is already linked in any Branch, it is Extracted first.
+         
+         procedure Next_In_Submenu (Root, Item, After: in     Index_Type;
+                                    Success          :    out Boolean);
+         -- Atomic operation used by Menu_Tree.Append
+         --
+         -- Atomically installs/inserts Item as the next item for After on
+         -- the Submenu rooted on Root.
+         --
+         -- Unlike Insert_After, Next_In_Submenu specifically checks that 
+         -- After is still on the Submenu of Root on entry before proceeeding. 
+         -- If it is not, or if any of Root, After, or Item equal, Null_Index
+         -- Success is set to False and no action is taken.
+         --
+         -- If Item is already linked in any Branch, it is Extracted first.
+         
       end Tree_Controller;
       
       
       type Menu_Tree (Param: Pool_Parameter) is
         limited new Standard_Tree with
          record
-            Controller: Tree_Controller;
-            Pool      : Item_Pool (Param);
+            Pool      : aliased Item_Pool (Param);
+            Controller: Tree_Controller (Pool'Access);
             Main_Menu : aliased Menu_Item;
          end record;
       

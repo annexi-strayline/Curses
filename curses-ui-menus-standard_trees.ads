@@ -131,7 +131,7 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    ------------------
    procedure Append (Tree    : in out Standard_Tree;
                      Branch  : in out Menu_Type'Class;
-                     Position: in     Standard_Cursor'Class)
+                     Position: in out Standard_Cursor'Class)
      is abstract
      with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Appends Item to Branch. If Position denotes an Item on a different
@@ -142,17 +142,18 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    
    procedure Prepend (Tree    : in out Standard_Tree;
                       Branch  : in out Menu_Type'Class;
-                      Position: in     Standard_Cursor'Class)
+                      Position: in out Standard_Cursor'Class)
      is abstract
      with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Prepends Item to Branch. If Position denotes an Item on a different
    -- branch, the item is moved to Branch.
    -- -- Explicit Raises --
-   -- *  Assertion_Error: Precondition violatde
+   -- *  Assertion_Error : Precondition violated
+   -- *  Constraint_Error: Branch does not belong to Tree.
    
    procedure Insert_Before (Tree    : in out Standard_Tree;
                             Before  : in     Standard_Cursor'Class;
-                            Position: in     Standard_Cursor'Class)
+                            Position: in out Standard_Cursor'Class)
      is abstract
      with Pre'Class => (Before.Has_Element and then Position.Has_Element)
                        and then (Before.On_Tree (Tree) 

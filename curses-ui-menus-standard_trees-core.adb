@@ -122,12 +122,15 @@ package body Curses.UI.Menus.Standard_Trees.Core is
          end Parent;
          
          
-         procedure Tree (Set: not null Standard_Tree_Access) is
+         procedure Identity (Tree : not null Standard_Tree_Access;
+                             Index: in Index_Type) is
          begin
-            Tree_Ptr := Set;
-         end Tree;
+            Tree_Ptr := Tree;
+            Self_Ptr := Index;
+         end Identity;
          
-         function  Tree return not null Standard_Tree_Access is (Tree_Ptr);
+         function  Tree  return Standard_Tree_Access is (Tree_Ptr);
+         function  Index return Index_Type           is (Self_Ptr);
       
       end Element_State;
    end Generic_Tree_Element;
@@ -139,69 +142,21 @@ package body Curses.UI.Menus.Standard_Trees.Core is
    package body Generic_Menu_Tree is
       
       --
-      -- Menu_Item
-      --
-      
-      -------------
-      -- Submenu --
-      -------------
-      overriding
-      function Submenu (Item: in out Menu_Item) return Menu_Type'Class
-      is
-         Tree      : Tree_Access := null;
-         Ref_OK    : Boolean     := False;
-         
-      begin
-         -- First check for any invalid conditions which require us to return
-         -- a regular "null menu"
-         if not Item.Has_Element
-           or else Item.Tree.all not in Menu_Tree'Class
-         then
-            return Null_Menu;
-         end if;
-         
-         Tree := Tree_Access (Item.Tree);
-         
-         Item.State.Register_Reference (Ref_OK);
-         
-         if not Ref_OK then
-            return Null_Menu;
-         end if;
-         
-         -- Note that once Root (Item) and Head (Item.Sub) references are
-         -- successfully registered, we are promised by the implementation
-         -- that that Item will not be deleted, and Sub will not be
-         -- modified.
-         
-         -- We should be safe from further exceptions past this point
-         return Menu_Branch'(Tree => Tree, Root => Root_Index);
-         
-      exception
-         when others =>
-            declare begin
-               if Ref_OK then
-                  Item.State.Deregister_Reference;
-               end if;
-            exception
-               -- Exceedingly unlikely!
-               when others => null;
-            end;
-            
-            return Null_Menu;
-      end Submenu;
-      
-      --
-      -- Common Implementations
+      -- Internal Infrastructure
       --
       
       -- Common_Add_Ref --
       --------------------
+      -- Common subrogram for calling Menu_Item.State.Register_Reference, when
+      -- refering to a Menu_Item using an Index value - requiring a call to
+      -- Modify.
+      
       function  Common_Add_Ref (Tree : in out Tree_Access;
                                 Index: in out Index_Type)
                                return Boolean
       with Inline is
          Ref_OK: Boolean := False;
-      
+         
          procedure New_Ref (Item: aliased in out GTE.Tree_Element'Class) is
          begin
             Item.Status.Register_Reference (Ref_OK);
@@ -218,7 +173,11 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       
       -- Common_Remove_Ref --
       -----------------------
-      function Common_Remove_Ref (Tree: in out Tree_Access;
+      -- Common subrogram for calling Menu_Item.State.Deregister_Reference,
+      -- when refering to a Menu_Item using an Index value - requiring a call
+      -- to Modify.
+      
+      function Common_Remove_Ref (Tree : in out Tree_Access;
                                   Index: in out Index_Type)
                                  return Boolean
       with Inline is
@@ -236,8 +195,14 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       
       -- Common_Cursor_Adjust --
       --------------------------
-      -- Shared code for Menu_Cursor and Menu_Branch
-      procedure Common_Cursor_Adjust (Tree: in out Tree_Access;
+      -- Shared code for Menu_Cursor and Menu_Branch - since both types are
+      -- internally functionally equivilent - Menu_Branch is really a "cursor"
+      -- pointing to a Menu_Branch root Item.
+      --
+      -- Adjust needs to increase the reference count for the newly copyied
+      -- cursor's target.
+      
+      procedure Common_Cursor_Adjust (Tree : in out Tree_Access;
                                       Index: in out Index_Type)
       with Inline is
          Ref_OK: Boolean := False;
@@ -256,13 +221,11 @@ package body Curses.UI.Menus.Standard_Trees.Core is
          
       exception
          when others =>
-            if Ref_OK 
-              and then Tree /= null
-              and then Index /= Null_Index
-            then
+            if Ref_OK then
                declare begin
                   Common_Remove_Reference (Tree => Tree, Index => Index);
                exception
+                  -- Extremely unlikely
                   when others => null;
                end;
             end if;
@@ -275,19 +238,67 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       
       -- Common_Cursor_Finalize --
       ----------------------------
+      -- Shared code for Menu_Cursor and Menu_Branch - since both types are
+      -- internally functionally equivilent - Menu_Branch is really a "cursor"
+      -- pointing to a Menu_Branch root Item.
+      --
+      -- Finalize removes the old reference which has now either been replaced
+      -- by an assignment, or has simply gone out of scope.
+      
       procedure Common_Cursor_Finalize (Tree : in out Tree_Access;
                                         Index: in out Index_Type)
-      is
-      begin
-         
-         if Tree /= null and then Index /= Null_Reference then
+      is begin
+         if Tree /= null and then Index /= Null_Index then
             Common_Remove_Ref (Tree => Tree, Index => Index);
          end if;
-         
-         -- We do not check for exceptions, as the only expected one would be
-         -- a Program_Error due to an implementation error internal to this
-         -- package.
       end Common_Cursor_Finalize;
+      
+      
+      --
+      -- Menu_Item
+      --
+      
+      -------------
+      -- Submenu --
+      -------------
+      overriding
+      function Submenu (Item: in out Menu_Item) return Menu_Type'Class
+      is
+         Tree      : Tree_Access := null;
+         Ref_OK    : Boolean     := False;
+         
+      begin
+         -- First check for any invalid conditions which require us to return
+         -- a regular "null menu"
+         if not Item.Has_Element
+           or else Item.State.Tree.all not in Menu_Tree'Class
+         then
+            return Null_Menu;
+         end if;
+         
+         Tree := Tree_Access (Item.Tree);
+         
+         Item.State.Register_Reference (Ref_OK);
+         
+         if not Ref_OK then
+            return Null_Menu;
+         end if;
+         
+         return Menu_Branch'(Tree => Tree, Root => Item.State.Index);
+         
+      exception
+         when others =>
+            declare begin
+               if Ref_OK then
+                  Item.State.Deregister_Reference;
+               end if;
+            exception
+               -- Exceedingly unlikely!
+               when others => null;
+            end;
+            
+            return Null_Menu;
+      end Submenu;
       
       
       --
@@ -326,7 +337,10 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       begin
          if Branch.Index = Null_Index then
             -- This indicates a Main_Menu branch, which doesn't need to track
-            -- references.
+            -- references, since the Main_Menu can never be deleted.
+            
+            -- If we lets this pass through, the Common_Cursor_Adjust would
+            -- obliterate the Menu_Branch entirely!
             return;
          else
             Common_Cursor_Adjust (Tree => Branch.Tree, Index => Branch.Root);
@@ -340,11 +354,7 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       overriding
       procedure Finalize (Branch: in out Menu_Branch) is
       begin
-         if Branch.Index = Null_Index then
-            return;
-         else
-            Common_Cursor_Finalize (Tree => Branch.Tree, Index => Branch.Root);
-         end if;
+         Common_Cursor_Finalize (Tree => Branch.Tree, Index => Branch.Root);
       end Finalize;
       
       
@@ -357,8 +367,8 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       type Branch_Iterator is limited new Menu_Iterators.Forward_Iterator with
          record
             Branch: Menu_Branch;
-            -- Using a standard Branch cursor ensures that the reference will
-            -- be properly Finalized
+            -- Using a standard Branch cursor ensures that the reference count 
+            -- will be properly handled
          end record;
       
       overriding
@@ -366,7 +376,15 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       is
          Ref_OK     : Boolean    := False;
          First_Index: Index_Type := Null_Index;
-        begin
+         
+         procedure Get_First_Index 
+           (Branch_Root: aliased in out GTE.Tree_Element'Class)
+         is
+         begin
+            First_Index := Branch_Root.Sub;
+         end Get_First_Index;
+         
+      begin
          
          if Iterator.Branch.Root = Null_Index then
             -- This refers to the "Main_Menu", which is stored outside of the
@@ -374,7 +392,9 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             First_Index := Iterator.Branch.Tree.Main_Menu.Sub;
          else
             -- For the regular branches
-            First_Index := Iterator.Branch.Tree.Pool(Iterator.Branch.Root).Sub;
+            Modify (Pool   => Iterator.Branch.Tree.Pool.all,
+                    Index  => Iterator.Branch.Root,
+                    Action => Get_First_Index'Access);
             -- Theoretically, it should not be possible to obtain a
             -- Branch_Iterator with a null Tree pointer. If that did somehow
             -- happen, we will get an access violation.
@@ -384,8 +404,11 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             return Null_Menu_Cursor;
          end if;
          
-         Ref_OK :=  Common_Add_Ref (Tree  => Iterator.Branch.Tree,
-                                    Index => First_Index);
+         -- We are hand-crafting a new Menu_Cursor, and so we need to ensure
+         -- that we add the new reference first. Eventually, it will be removed
+         -- by Finalize
+         Ref_OK := Common_Add_Ref (Tree  => Iterator.Branch.Tree,
+                                   Index => First_Index);
          
          if Ref_OK then
             return Menu_Cursor'(Tree  => Iterator.Branch.Tree,
@@ -416,7 +439,7 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             -- explicit check here
             return Null_Menu_Cursor;
          end if;
-      
+         
          Next_Index := Position.Tree.Pool(Position.Index).Next;
          
          if Next_Index = Null_Index then
@@ -439,7 +462,7 @@ package body Curses.UI.Menus.Standard_Trees.Core is
                Common_Remove_Ref (Tree => Position.Tree, Index => Next_Index);
             end if;
             return Null_Menu_Cursor;
-         
+            
       end Next;
       
       
@@ -458,7 +481,6 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             -- Note that Iterator has now been Initialized, and assigning to
             -- the Branch component will trigger Adjust, thereby setting-up
             -- the reference count properly
-            
             Iterator.Branch := Menu;
          end return;
          
@@ -472,6 +494,105 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       -- Menu_Tree
       --
       
+      ---------------------
+      -- Tree_Controller --
+      ---------------------
+      protected body Tree_Controller is
+         
+         -- Allocate_Index --
+         --------------------
+         procedure Allocate_Index (Index: out Index_Type) is
+         begin
+            Index_Type := Allocate (Pool => Our_Pool.all);
+         
+         exception
+            when others =>
+               return Null_Index;
+         end Allocate_Index;
+      
+      
+         -- Free_Index --
+         ----------------
+         procedure Free_Index (Index: in Index_Type) is
+         begin
+            Free_Index (Pool => Our_Pool.all, Index => Index);
+            
+         exception
+            when others => null;
+         end Free_Index;
+      
+         -- Extract --
+         -------------
+         procedure Extract (Index: Index_Type) is
+            Prev, Next, Parent: Index_Type;
+            
+            -- Extract Prev and Next from Index and then clear both
+            procedure Do_Extract
+              (Item: aliased in out GTE.Tree_Element'Class)
+            is begin
+               Prev   := Item.State.Prev;
+               Next   := Item.State.Next;
+               Parent := Item.State.Parent;
+               
+               Item.State.Prev   (Null_Index);
+               Item.State.Next   (Null_Index);
+               Item.State.Parent (Null_Index);
+            end Do_Extract;
+            
+            -- Link the Prev element through to Next
+            procedure Linkthrough_Prev
+              (Item: aliased in out GTE.Tree_Element'Class)
+            is begin
+               Item.State.Next := Next;
+            end Linkthrough_Prev;
+            
+            -- Link the Next element back to Prev
+            procedure Linkback_Next
+              (Item: aliased in out GTE.Tree_Element'Class)
+            is begin
+               Item.State.Prev := Prev;
+            end Linkback_Next;
+            
+            -- Relink branch
+            procedure Relink_Branch
+              (Root: aliased in out GTE.Tree_Element'Class)
+            is begin
+               Item.State.Sub := Next;
+            end Relink_Branch;
+         
+         begin
+            -- Extract the Item and separate all the links first
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Index,
+                    Action => Do_Extract'Access);
+            
+            -- Link back and forward
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Prev,
+                    Action => Linkthrough_Prev'Access);
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Next,
+                    Action => Linkback_Next'Access);
+            
+            -- Finally, if Item was the first on the Branch, make sure
+            -- that the Branch Root points to the new (Next) index
+            if Prev = Null_Index then
+               if Parent = Null_Index then
+                  -- This item is on the Main_Menu, so we can link it in
+                  -- directly
+                  Our_Tree.Main_Menu.State.Sub (Next);
+               else
+                  Modify (Pool   => Our_Pool.all,
+                          Index  => Parent,
+                          Action => Relink_Branch);
+               end if;
+            end if;
+         end Extract;
+      
+      end Tree_Controller;
+      
+      
       --------------
       -- New_Item --
       --------------
@@ -479,9 +600,9 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       function New_Item (Tree: aliased in out Menu_Tree)
                         return Standard_Cursor'Class
       is
-      New_Index: Index_Type := Null_Index;
-      
-
+         New_Index: Index_Type := Null_Index;
+         
+         
       begin
          -- Try to obtain a new item from the pool and then return a new cursor
          -- to it.
@@ -499,7 +620,7 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             procedure Activate_Item
               (Item: aliased in out GRE.Tree_Element'Class) is
             begin
-               Item.State.Identity (Tree => Tree'Access,
+               Item.State.Identity (Tree  => Tree'Access,
                                     Index => New_Index);
                
                Item.State.Activate;
@@ -508,7 +629,7 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             Modify (Pool   => Tree.Pool,
                     Index  => New_Index,
                     Action => Activate_Item'Access);
-         
+            
          end;
          
          -- Attempt to add the first reference
@@ -657,7 +778,8 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             -- After we Free, we can't touch Item anymore, so we will pop-off
             -- the Submenu part for our own reference now
          begin
-            Free (Pool => Tree.Pool, Item => Item.State.Index);
+            Tree.Controller.Extract (Item.State.Index);
+            Tree.Controller.Free (Pool => Tree.Pool, Item => Item.State.Index);
             Delete_Branch (Submenu);
             
          exception
@@ -706,15 +828,17 @@ package body Curses.UI.Menus.Standard_Trees.Core is
          -- If anything fails from here-on-out (we get an exception), then
          -- we need to re-register the reference.
          
+         -- Phase 1
          Modify (Pool   => Tree.Pool,
                  Index  => Cursor.Index,
                  Action => Deactivate_Item'Access);
-         -- Phase 1
          
+         
+         -- Phase 2
          Modify (Pool   => Tree.Pool,
                  Index  => Cursor.Index,
                  Action => Delete_Item'Access);
-         -- Phase 2
+         
          
          -- This means either everything worked, or Phase 2 failed. If Phase 2
          -- fails, we cannot trust the tree anymore. Therefore we need to
@@ -739,6 +863,134 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             
             raise;
       end Delete;
+      
+      
+      ------------
+      -- Append --
+      ------------
+      overriding
+      procedure Append (Tree    : in out Menu_Tree;
+                        Branch  : in out Menu_Type'Class;
+                        Position: in out Standard_Cursor'Class)
+      is
+         Item: Menu_Cursor renames Menu_Cursor (Position);
+         -- This is protected by the Precondition
+      begin
+         -- The preconditions mean that Tree is valid, and that Position is a
+         -- Cursor on it, but we also need to check that Branch belongs to Tree
+         if Branch.Tree /= Tree'Unchecked_Access then
+            raise Constraint_Error with "Branch does not belong to Tree";
+         end if;
+         
+         -- Now everthing should be valid. We now need to seek to the end of
+         -- the branch. We will simply use our own iteration scheme to do this.
+         -- We are talking about actual Menus here, so they really ought not to
+         -- be thousands of items long. Maintaining end of list pointers seems
+         -- like a waste of effort.
+         
+         -- The good thing about iterating is that it creates Cursors. Each run
+         -- through the loop has a Cursor which excludes any possible deletion
+         -- of the Item until we are done with it.
+         
+         declare
+            Iterator: Menu_Iterators.Forward_Iterator'Class := Branch.Iterate;
+            Last_Selector: Menu_Cursor := Iterator.First;
+            Next_Selector: Menu_Cursor;
+            
+            Add_OK: Boolean := False;
+         begin
+              Try_Append: loop
+               -- First see if there is anything on this branch at all
+               if not Last_Selector.Has_Element then
+                  
+                  -- Apparently the Branch is empty. We call First_In_Submenu,
+                  -- since it convers the less likely case that an item has
+                  -- been added since we called Iterator.First
+                  Tree.Controller.First_In_Submenu
+                    (Root    => Branch.Root,
+                     Subject => Last_Selector.Index);
+                  
+                  return;
+               end if;
+               
+                 Seek_End: loop
+                  Last_Selector := Iterator.Next (This_Selector);
+                  exit Seek_End when not Next_Selector.Has_Element;
+                  
+                  Last_Selector := Next_Selector;
+               end loop Seek_End;
+               
+               -- This_Selector should now point to the last item (currently)
+               -- on the Branch. Note that since we have an active Cursor to
+               -- that Item, it cannot be deleted, though it could be moved,
+               -- which is then caught by Next_On_Submenu
+               Tree.Controller.Next_In_Submenu (Root    => Branch.Root,
+                                                Item    => Item.Index,
+                                                After   => Last_Selector.Index,
+                                                Success => Add_OK);
+               
+               exit Try_Append when Add_OK;
+               -- If Add_OK is False, this means the the last item on Branch
+               -- has been moved to another branch between Seek_End and the
+               -- attempt to append Item. Therefore we need to do another
+               -- seek attempt.
+            end loop Try_Append;
+         end;
+      end Append;
+      
+      
+      -------------
+      -- Prepend --
+      -------------
+      overriding
+      procedure Prepend (Tree    : in out Menu_Tree;
+                         Branch  : in out Menu_Type'Class;
+                         Position: in out Standard_Cursor'Class)
+      is
+         Item: Menu_Cursor renames Menu_Cursor (Position);
+         -- This is protected by the Precondition
+      begin
+         -- The preconditions mean that Tree is valid, and that Position is a
+         -- Cursor on it, but we also need to check that Branch belongs to Tree
+         if Branch.Tree /= Tree'Unchecked_Access then
+            raise Constraint_Error with "Branch does not belong to Tree";
+         end if;
+         
+         -- This is significantly easier than for Append!
+         Tree.Controller.First_In_Submenu (Root => Branch.Root,
+                                           Item => Item.Index);
+      end Prepend;
+      
+      
+      -------------------
+      -- Insert_Before --
+      -------------------
+      procedure Insert_Before (Tree    : in out Menu_Tree;
+                               Before  : in     Standard_Cursor'Class;
+                               Position: in out Standard_Cursor'Class)
+      is
+         Before_Cursor: Menu_Cursor renames Menu_Cursor (Before);
+         Item_Cursor  : Menu_Cursor renames Menu_Cursor (Position);
+      begin
+         Tree.Controller.Insert_Before (Item   => Item_Cursor.Index,
+                                        Before => Before_Cursor.Index);
+      end Insert_Before;
+      
+      
+      ------------------
+      -- Insert_After --
+      ------------------
+      overriding
+      procedure Insert_After (Tree    : in out Menu_Tree;
+                              After   : in out Standard_Cursor'Class;
+                              Position: in out Standard_Cursor'Class)
+      is
+         After_Cursor: Menu_Cursor renames Menu_Cursor (Before);
+         Item_Cursor : Menu_Cursor renames Menu_Cursor (Position);
+      begin
+         Tree.Controller.Insert_After (Item  => Item_Cursor.Index,
+                                       After => After_Cursor.Index);
+      end Insert_After;
       
    end Generic_Menu_Tree;
 end Curses.UI.Menus.Standard_Trees.Core;
