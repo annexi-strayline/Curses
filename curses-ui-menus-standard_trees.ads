@@ -45,7 +45,7 @@ with Ada.Containers;
 
 package Curses.UI.Menus.Standard_Trees with Preelaborate is
    
-   exception Capacity_Error renames Ada.Containers.Capacity_Error;
+   Capacity_Error: exception renames Ada.Containers.Capacity_Error;
    
    ---------------------
    -- Standard_Cursor --
@@ -85,25 +85,27 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
      with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Returns a reference to an actual Item in the tree.
    
-   function Main_Menu (Tree: in out Standard_Tree) return Menu_Type'Class
+   function Staging_Branch (Tree: aliased in out Standard_Tree)
+                           return Menu_Type'Class
      is abstract;
-   -- Returns the "Main_Menu" as a reference type for an iterable Menu_Type
-   -- object which represents the root branch of the Standard_Tree.
-
+   -- Returns a reference to the Tree's default root branch. All new items
+   -- allocated on the Tree via New_Item are _prepended_ to the Staging_Branch.
+   -- The Staging_Branch is permanent for the life of the associated Tree
+   -- object.
    
    -- Allocation --
    ----------------
    function New_Item (Tree: aliased in out Standard_Tree)
-     return Standard_Cursor'Class is abstract;
+                     return Standard_Cursor'Class is abstract;
    -- Allocates a new Menu_Item from Tree, and returns a cursor referencing
-   -- it. Newly allocated Items are not associated with a Branch. If the
-   -- Item is not placed on a Branch, it will be Deleted when all referencing 
-   -- Cursors have finalized.
+   -- it. New_Items are not associated with any branch. If the Item is not
+   -- later assigned to a Branch, it will be deleted during Finalization of the
+   -- Cursor
    
    procedure Delete (Tree    : in out Standard_Tree;
                      Position: in out Standard_Cursor'Class)
      is abstract
-     with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+       with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Deletes (deallocates) the Item at Position.
    --
    -- If the Position donotes a Submenu, the Submenu is iterated, with
@@ -133,7 +135,7 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                      Branch  : in out Menu_Type'Class;
                      Position: in out Standard_Cursor'Class)
      is abstract
-     with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+       with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Appends Item to Branch. If Position denotes an Item on a different
    -- branch, the item is moved to Branch.
    -- -- Explicit Raises --
@@ -144,7 +146,7 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                       Branch  : in out Menu_Type'Class;
                       Position: in out Standard_Cursor'Class)
      is abstract
-     with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+       with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Prepends Item to Branch. If Position denotes an Item on a different
    -- branch, the item is moved to Branch.
    -- -- Explicit Raises --
@@ -155,9 +157,9 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                             Before  : in     Standard_Cursor'Class;
                             Position: in out Standard_Cursor'Class)
      is abstract
-     with Pre'Class => (Before.Has_Element and then Position.Has_Element)
-                       and then (Before.On_Tree (Tree) 
-                                 and then Position.On_Tree (Tree));
+       with Pre'Class => (Before.Has_Element and then Position.Has_Element)
+                         and then (Before.On_Tree (Tree) 
+                                   and then Position.On_Tree (Tree));
    -- Inserts Position ahead of Before. If Before is on a different Branch than
    -- Position, Position is moved to that branch.
    -- -- Explicit Raises --
@@ -167,9 +169,9 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                            After   : in out Standard_Cursor'Class;
                            Position: in out Standard_Cursor'Class)
      is abstract
-     with Pre'Class => (After.Has_Element and then Position.Has_Element)
-                       and then (After.On_Tree (Tree)
-                                 and then Position.On_Tree (Tree));
+       with Pre'Class => (After.Has_Element and then Position.Has_Element)
+                         and then (After.On_Tree (Tree)
+                                  and then Position.On_Tree (Tree));
    -- Inserts Position ahead of the element at Position.
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated

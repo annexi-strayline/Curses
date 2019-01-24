@@ -112,7 +112,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          -- branch on which this Element is located.
          
          
-         procedure Identity (Tree : not null Standard_Tree_Access;
+         procedure Identity (Tree : in not null Standard_Tree_Access;
                              Index: in Index_Type)
            with Pre => Index /= Null_Index;
          
@@ -268,9 +268,9 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
         with Inline, Pre => Position in Menu_Cursor'Class;
       
       overriding
-      function Main_Menu (Tree: in out Menu_Tree)
+      function Staging_Branch (Tree: in out Menu_Tree)
                          return Menu_Type'Class
-        with Inline, Post => Main_Menu'Result in Menu_Branch'Class;
+        with Inline, Post => Staging_Branch'Result in Menu_Branch'Class;
       
       overriding
       function New_Item (Tree: aliased in out Menu_Tree)
@@ -357,13 +357,22 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          -- Element Splicing --
          ----------------------
          procedure Extract (Index: Index_Type);
-         -- Cuts Index out and points Prev.Next -> Next and Next.Prev -> Prev
+         -- Cuts Index out from it's list, setting Prev.Next -> Next and
+         -- Next.Prev -> Prev. If Index is the first item in a Submenu, that
+         -- Parent item's Submenu is retargeted to Next.
+         --
+         -- Next, Prev, and Parent are then set to Null_Index.
+         --
+         -- The item's submenu is not modified.
          
          procedure Insert_Before (Item, Before: Index_Type);
          procedure Insert_After  (Item, After : Index_Type);
          -- Relocates From to Before/After, manipulating the links accordingly.
-         -- If Item is already on a Branch, it is Extracted first.
+         -- Item is Extracted first.
          
+         -- Splicing subprograms do not check for Null_Index on any parameters.
+         -- These checks are handled by Preconditions for the public operations
+         -- that make use of the operations.
          
          -- Submenu Operations
          
@@ -372,8 +381,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          --
          -- Atomically installs/inserts Item as the first item for the
          -- Submenu Branch rooted at Root. 
-         --
-         -- If Item is already linked in any Branch, it is Extracted first.
+         -- Item is Extracted first.
          
          procedure Next_In_Submenu (Root, Item, After: in     Index_Type;
                                     Success          :    out Boolean);
@@ -381,24 +389,33 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
          --
          -- Atomically installs/inserts Item as the next item for After on
          -- the Submenu rooted on Root.
+         -- Item is Extracted first.
          --
          -- Unlike Insert_After, Next_In_Submenu specifically checks that 
          -- After is still on the Submenu of Root on entry before proceeeding. 
          -- If it is not, or if any of Root, After, or Item equal, Null_Index
          -- Success is set to False and no action is taken.
-         --
-         -- If Item is already linked in any Branch, it is Extracted first.
          
       end Tree_Controller;
       
-      
+      ----------------------------------------
       type Menu_Tree (Param: Pool_Parameter) is
         limited new Standard_Tree with
          record
             Pool      : aliased Item_Pool (Param);
             Controller: Tree_Controller (Pool'Access);
-            Main_Menu : aliased Menu_Item;
+            Staging   : aliased Menu_Item;
          end record;
+      
+      Staging_Branch_Index: Index_Type renames Null_Index;
+      -- Remember that the Staging_Branch of a given tree is a logical node. We
+      -- use a Menu_Branch with a Null_Index root to refer to the
+      -- Staging_Branch. As an extra matter of convenience, we don't need to
+      -- register references for the Staging_Branch, since it will always exist
+      -- as long as the Tree exists, and it cannot be deleted.
+      --
+      -- Though a Menu_Branch is functionally similar to a Menu_Cursor, unlike
+      -- a cursor, it can never be directly deleted.
       
       
       --
@@ -432,20 +449,12 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
                       return Menu_Item_Reference_Type
         is (Menu.Tree.Index (Menu_Cursor (Cursor)));
       
-      
       overriding
-      function Main_Menu (Tree: in out Menu_Tree)
-                         return Menu_Type'Class
-        is (Menu_Branch'(Menu_Type with 
-                         Tree => Tree'Access, Index => Null_Index));
-      -- Remember that the Main_Menu of a given tree is a logical node. We use
-      -- a Menu_Branch with a Null_Index root to refer to the Main_Menu. As an
-      -- extra matter of convenience, we don't need to register references for
-      -- the Main_Menu, since it will always exist as long as the Tree exists,
-      -- and it cannot be deleted.
-      --
-      -- Though a Menu_Branch is functionally similar to a Menu_Cursor, unlike
-      -- a cursor, it can never be directly deleted.
+      function Staging_Branch (Tree: aliased in out Menu_Tree)
+                              return Menu_Type'Class
+        is (Menu_Branch'(Menu_Type with
+                         Tree => Tree'Access, Index => Staging_Branch_Index));
+
       
    end Generic_Menu_Tree;
    
