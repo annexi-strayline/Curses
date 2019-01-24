@@ -56,7 +56,7 @@ package body Curses.UI.Menus.Standard_Trees.Core is
          procedure Register_Reference (Success: out Boolean) is
          begin
             if Active and then Refs < Natural'Last then
-               Refs    := Regf + 1;
+               Refs    := Refs + 1;
                Success := True;
             else
                Success := False;
@@ -122,7 +122,7 @@ package body Curses.UI.Menus.Standard_Trees.Core is
          end Parent;
          
          
-         procedure Identity (Tree : not null Standard_Tree_Access;
+         procedure Identity (Tree : in not null Standard_Tree_Access;
                              Index: in Index_Type) is
          begin
             Tree_Ptr := Tree;
@@ -336,10 +336,10 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       procedure Adjust (Branch: in out Menu_Branch) is
       begin
          if Branch.Index = Null_Index then
-            -- This indicates a Main_Menu branch, which doesn't need to track
-            -- references, since the Main_Menu can never be deleted.
-            
-            -- If we lets this pass through, the Common_Cursor_Adjust would
+            -- This indicates a Staging_Branch branch, which doesn't need to
+            -- track references, since the Staging_Branch can never be deleted.
+            --
+            -- If we let this pass through, the Common_Cursor_Adjust would
             -- obliterate the Menu_Branch entirely!
             return;
          else
@@ -387,9 +387,9 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       begin
          
          if Iterator.Branch.Root = Null_Index then
-            -- This refers to the "Main_Menu", which is stored outside of the
-            -- pool
-            First_Index := Iterator.Branch.Tree.Main_Menu.Sub;
+            -- This refers to the "Staging_Branch", which is stored outside of
+            -- the pool
+            First_Index := Iterator.Branch.Tree.Staging.Sub;
          else
             -- For the regular branches
             Modify (Pool   => Iterator.Branch.Tree.Pool.all,
@@ -541,24 +541,24 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             
             -- Link the Prev element through to Next
             procedure Linkthrough_Prev
-              (Item: aliased in out GTE.Tree_Element'Class)
+              (Prev_Actual: aliased in out GTE.Tree_Element'Class)
             is begin
-               Item.State.Next := Next;
+               Prev_Actual.State.Next (Next);
             end Linkthrough_Prev;
             
             -- Link the Next element back to Prev
             procedure Linkback_Next
-              (Item: aliased in out GTE.Tree_Element'Class)
+              (Next_Actual: aliased in out GTE.Tree_Element'Class)
             is begin
-               Item.State.Prev := Prev;
+               Next_Actual.State.Prev (Prev);
             end Linkback_Next;
             
-            -- Relink branch
-            procedure Relink_Branch
+            -- Retarget parent
+            procedure Retarget_Parent
               (Root: aliased in out GTE.Tree_Element'Class)
             is begin
-               Item.State.Sub := Next;
-            end Relink_Branch;
+               Root.State.Sub (Next);
+            end Retarget_Parent;
          
          begin
             -- Extract the Item and separate all the links first
@@ -578,18 +578,169 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             -- Finally, if Item was the first on the Branch, make sure
             -- that the Branch Root points to the new (Next) index
             if Prev = Null_Index then
-               if Parent = Null_Index then
-                  -- This item is on the Main_Menu, so we can link it in
+               if Parent = Staging_Branch_Index then
+                  -- This item is on the Staging_Branch, so we can link it in
                   -- directly
-                  Our_Tree.Main_Menu.State.Sub (Next);
+                  Our_Tree.Staging.State.Sub (Next);
                else
                   Modify (Pool   => Our_Pool.all,
                           Index  => Parent,
-                          Action => Relink_Branch);
+                          Action => Retarget_Parent'Access);
                end if;
             end if;
          end Extract;
-      
+         
+         
+         -- Insert_Before --
+         -------------------
+         procedure Insert_Before (Item, Before: Index_Type) is
+            
+            Before_Prev, Before_Parent: Index_Type;
+            
+            procedure Relink_Before
+              (Before_Actual: aliased in out GRE.Tree_Element'Class)
+            is begin
+               Before_Prev   := Before_Actual.State.Prev;
+               Before_Parent := Before_Actual.State.Parent;
+               Before_Actual.State.Prev (Item);
+            end Relink_Before;
+               
+            procedure Relink_Item
+               (Item_Actual: aliased in out GTE.Tree_Element'Class)
+            is begin
+               Item_Actual.State.Next   (Before);
+               Item_Actual.State.Prev   (Before_Prev);
+               Item_Actual.State.Parent (Before_Parent);
+            end Relink_Item;
+            
+            procedure Retarget_Parent
+              (Parent_Actual: aliased in out GTE.Tree_Element'Class)
+            is begin
+               Parent_Actuak.State.Sub (Item);
+            end Retarget_Parent;
+            
+         begin
+            Extract (Item);
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Before,
+                    Action => Relink_Before'Access);
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Item,
+                    Action => Relink_Item'Access);
+            
+            if Before_Prev = Null_Index then
+               -- Inserted item is at the front, we need to retarget the Parent
+               -- Item to point to Item, which is now in front
+               if Before_Parent = Staging_Branch_Index then
+                  -- This item is on the Staging_Branch, so we can link it in
+                  -- directly
+                  Our_Tree.Staging.State.Sub (Item);
+               else
+                  Modify (Pool   => Our_Pool.all,
+                          Index  => Parent,
+                          Action => Retarget_Parent'Access);
+               end if;
+            end if;
+         end Insert_Before;
+         
+         
+         -- Insert_After --
+         ------------------
+         procedure Insert_After (Item, After : Index_Type) is
+            After_Next, After_Parent: Index_Type;
+            
+            procedure Relink_After
+              (After_Actual: aliased in out GRE.Tree_Element'Class)
+            is begin
+               After_Next   := After_Actual.State.Next;
+               After_Parent := After_Actual.State.Parent;
+               After_Actual.State.Next (Item);
+            end Relink_After;
+            
+            procedure Relink_Item
+              (Item_Actual: aliased in out GRE.Tree_Element'Class)
+            is begin
+               Item_Actual.State.Next   (After_Next);
+               Item_Actual.State.Prev   (After);
+               Item_Actual.State.Parent (After_Parent);
+            end Relink_Item;
+            
+         begin
+            Extract (Item);
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => After,
+                    Action => Relink_After'Access);
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Item,
+                    Action => Relink_Item'Access);
+         end Insert_After;
+         
+         
+         -- First_In_Submenu --
+         ----------------------
+         procedure First_In_Submenu (Root, Item: in Index_Type) is
+            First: Index_Type;
+            
+            procedure Retarget_Root
+              (Root_Actual: aliased in out GRE.Tree_Element'Class)
+            is begin
+               First := Root_Actual.State.Sub;
+               Root_Actual.State.Sub (Item);
+            end Get_First;
+            
+            procedure Link_Item
+              (Item_Actual: aliased in out GRE.Tree_Element'Class)
+            is begin
+               Item_Actual.State.Next   (First);
+               Item_Actual.State.Parent (Root);
+            end Link_Item;
+            
+         begin
+            Extract (Item);
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Root,
+                    Action => Retarget_Root'Access);
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => Item,
+                    Action => Link_Item'Access);
+            
+         end First_In_Submenu;
+         
+         
+         -- Next_In_Submenu --
+         ---------------------
+         procedure Next_In_Submenu (Root, Item, After: in     Index_Type;
+                                    Success          :    out Boolean)
+         is
+            After_OK: Boolean;
+            
+            -- Verify that After is still on Root's submenu
+            procedure Verify_After
+              (After_Actual: aliased in out GRE.Tree_Element'Class)
+            is begin
+               After_OK := After_Actual.State.Parent = Root;
+            end Verify_After;
+            
+         begin
+            
+            Modify (Pool   => Our_Pool.all,
+                    Index  => After,
+                    Action => Verify_After'Access);
+            
+            if not After_OK then
+               Success := False;
+            else
+               Insert_After (Item => Item, After => After);
+               Success := True;
+            end if;
+         end Next_In_Submenu;
+            
       end Tree_Controller;
       
       
@@ -601,7 +752,6 @@ package body Curses.UI.Menus.Standard_Trees.Core is
                         return Standard_Cursor'Class
       is
          New_Index: Index_Type := Null_Index;
-         
          
       begin
          -- Try to obtain a new item from the pool and then return a new cursor
@@ -622,7 +772,6 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             begin
                Item.State.Identity (Tree  => Tree'Access,
                                     Index => New_Index);
-               
                Item.State.Activate;
             end Activate_Item;
          begin
@@ -640,6 +789,10 @@ package body Curses.UI.Menus.Standard_Trees.Core is
             raise Program_Error with
               "Unable to create first reference of new Menu_Item.";
          end if;
+         
+         -- Finally, we prepend the new item to the Stanging_Branch
+         Tree.Controller.First_In_Submenu (Root => Staging_Branch_Index,
+                                           Item => New_Index);
          
          return Menu_Cursor'(Standard_Cursor with 
                              Tree => Tree'Access, Index => New_Index);
