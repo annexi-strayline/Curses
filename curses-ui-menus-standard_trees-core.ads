@@ -178,13 +178,12 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       -- ** Allocate and Free do not need to be task-safe, All calls to
       -- Allocate or Free from a Tree object will be serialized.
       
-      with procedure Modify
-        (Pool  : in out Item_Pool;
-         Index : in     GTE.Index_Type;
-         Action: not null access procedure 
-           (Item: aliased in out GTE.Tree_Element'Class)) is <>;
-      -- Modify will only be used to access GTE.Tree_Element.State,
-      -- and so does not need to be made explicitly task-safe.
+      with function Lookup (Pool : in out Item_Pool;
+                            Index: in     GTE.Index_Type)
+                           return Menu_Item_Reference_Type;
+      -- Return a Menu_Item_Reference_Type to a GTE.Tree_Element'Class object
+      -- of Pool, referenced by Index. If Index is Null_Index, Reference shall
+      -- return Curses.UI.Menus.Null_Menu_Reference
       
    package Generic_Menu_Tree is
    
@@ -268,7 +267,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
         with Inline, Pre => Position in Menu_Cursor'Class;
       
       overriding
-      function Staging_Branch (Tree: in out Menu_Tree)
+      function Staging_Branch (Tree: aliased in out Menu_Tree)
                          return Menu_Type'Class
         with Inline, Post => Staging_Branch'Result in Menu_Branch'Class;
       
@@ -340,14 +339,11 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       -- Menu_Tree --
       ---------------
       
-      type Pool_Access is access all Item_Pool
-        with Storage_Size => 0;
-      
       -- Tree_Controller --
       ---------------------
       -- The tree controller is used to ensure specific operations which
       -- modify the tree are executed atomically.
-      protected type Tree_Controller (Our_Pool: not null Pool_Access) is
+      protected type Tree_Controller (Our_Tree: not null access Menu_Tree) is
          
          -- Element Allocation --
          ------------------------
@@ -402,8 +398,8 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       type Menu_Tree (Param: Pool_Parameter) is
         limited new Standard_Tree with
          record
-            Pool      : aliased Item_Pool (Param);
-            Controller: Tree_Controller (Pool'Access);
+            Pool      : Item_Pool (Param);
+            Controller: Tree_Controller (Menu_Tree'Access);
             Staging   : aliased Menu_Item;
          end record;
       
@@ -422,11 +418,21 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       -- Function Expressions
       --
       
+      -- Menu_Tree --
+      ---------------
+      overriding
+      function Index (Tree    : in out Menu_Tree;
+                      Position: in     Standard_Cursor'Class)
+                     return Menu_Item_Reference_Type
+        is (Lookup (Pool => Tree.Pool, Index => Menu_Cursor (Position).Index));
+      -- Note the type conversion is protected by the Precondition
+      
+      
       -- Menu_Cursor --
       -----------------
       overriding
       function Has_Element (Position: Menu_Cursor) return Boolean
-        is (Position.Tree /= null and then Index /= Null_Index);
+        is (Position.Tree /= null and then Position.Index /= Null_Index);
       
       overriding
       function On_Tree (Position: in     Menu_Cursor;
@@ -441,6 +447,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
         is (Menu_Item(Position.Tree.Index (Position).Ref.all).State.Parent
               = Menu_Branch(Branch).Root);
       
+      
       -- Menu_Branch --
       -----------------
       overriding
@@ -453,7 +460,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       function Staging_Branch (Tree: aliased in out Menu_Tree)
                               return Menu_Type'Class
         is (Menu_Branch'(Menu_Type with
-                         Tree => Tree'Access, Index => Staging_Branch_Index));
+                         Tree => Tree'Access, Root => Staging_Branch_Index));
 
       
    end Generic_Menu_Tree;
