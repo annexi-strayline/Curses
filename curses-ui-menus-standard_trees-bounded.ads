@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -47,12 +47,12 @@
 -- Refer to the parent Standart_Trees package for a full interface listing of
 -- the Standard_Tree interface.
 
-private with Curses.UI.Menus.Standard_Trees.Core;
+private with Curses.UI.Menus.Standard_Trees.Logic;
 
 generic
    type Base_Item is limited new Menu_Item_Type with private;
    
-package Curses.UI.Menus.Standard_Trees.Bounded with Preelaborate is
+package Curses.UI.Menus.Standard_Trees.Bounded is
    
    -----------------
    -- Menu_Cursor --
@@ -70,91 +70,68 @@ package Curses.UI.Menus.Standard_Trees.Bounded with Preelaborate is
    type Menu_Branch is new Menu_Type with private;
    -- References a particular Submenu of a tree.
    
-   overriding
-   procedure Adjust (Branch: in out Menu_Branch);
-   
-   overriding
-   procedure Finalize (Branch: in out Menu_Branch);
-   
-   overriding 
-   function  Index (Menu  : Menu_Branch; 
-                    Cursor: Menu_Cursor_Type'Class) 
-                   return Menu_Item_Reference_Type;
-   
    ------------------
    -- Bounded_Tree --
    ------------------
-   type Bounded_Tree (Capacity: Positive) is limited new Standard_Tree
+   type Bounded_Menu_Tree (Capacity: Positive) is limited new Standard_Tree
      with private;
    
 private
-
-   subtype Index_Type is Natural;
-   Null_Index: constant Index_Type := 0;
-
-   package Core renames Curses.UI.Menus.Standard_Trees.Core;
-   
-   -- Generic element
-   package GTE is new Core.Generic_Tree_Element
-     (Base_Item => Base_Item,
-      Index_Type => Index_Type,
-      Null_Index => Null_Index);
-   
-   use all type GTE.Tree_Element;
-   
-   type Pool_Data is array (Index_Type range <>) of aliased GTE.Tree_Element;
-   
    
    ---------------
    -- Item_Pool --
    ---------------
-   protected type Pool_Controller (Max_Index: Index_Type) is
-      
-      procedure Allocate (Index: out    Index_Type);
-      procedure Free     (Index: in out Index_Type);
-      
-   private
-      
-      Have_Fresh  : Boolean    := True;
-      Next_Fresh  : Index_Type := Null_Index;
-      
-      Recycle_Root: Index_Type := Null_Index;
-      
-   end Pool_Controller;
+   subtype Index_Type    is Integer    range 0 .. Positive'Last;
+
+   Null_Index: constant Index_Type := Index_Type'First;
+   
+   -- Generic element
+   package GTE is new Logic.Generic_Tree_Element
+     (Base_Item  => Base_Item,
+      Index_Type => Index_Type,
+      Null_Index => Null_Index);
+   
+   type Pool_Data is array (Positive range <>) of aliased GTE.Tree_Element;
    
    ----------------------------------------
    type Item_Pool (Capacity: Positive) is
       record
-         Controller: Pool_Controller (Capacity);
-         Data      : Pool_Data (1 .. Capacity);
+         Data: Pool_Data (1 .. Capacity);
+         
+         Next_Fresh: Index_Type := 1;
+         -- First unused index in Data. Set to Null_Index when there are no
+         -- more "Fresh" items available
+         
+         Recycle_List: Index_Type := Null_Index;
+         -- Points to an Index which is the head of a list of free items.
       end record;
+   -- Note that the Logic package promises that all calls to Free and Alocate
+   -- are serialized, so we don't need to add further synchronization features
+   -- to this type.
    
+   
+   -- Item_Pool operations used by Logic.Generic_Menu_Tree
    function  Allocate (Pool: in out Item_Pool) return Index_Type;
    
-   procedure Free     (Pool: in out Item_Pool);
+   procedure Free (Pool : in out Item_Pool;
+                   Index: in     Index_Type);
    
-   procedure Modify   (Pool  : in out Item_Pool;
-                       Index : in     Index_Type;
-                       Action: not null access procedure
-                         (Item: aliased in out GTE.Tree_Element'Class));
-   
-   
+   function  Lookup (Pool : in out Item_Pool;
+                     Index: in Index_Type)
+                    return Menu_Item_Reference_Type
+     is (Menu_Item_Reference_Type'(Ref => Pool.Data(Index)'Access));
+
    -- Generic tree
-   package GMT is new Core.Generic_Menu_Tree
+   package GMT is new Logic.Generic_Menu_Tree
      (GTE            => GTE,
       Pool_Parameter => Positive,
       Item_Pool      => Item_Pool);
-   
-   use all type GMT.Menu_Item;
-   use all type GMT.Menu_Cursor;
-   use all type GMT.Menu_Branch;
-   use all type GMT.Menu_Tree;
    
    type Menu_Item   is limited new GMT.Menu_Item   with null record;
    type Menu_Cursor is         new GMT.Menu_Cursor with null record;
    type Menu_Branch is         new GMT.Menu_Branch with null record;
    
-   type Bounded_Tree (Capacity: Positive) is 
+   type Bounded_Menu_Tree (Capacity: Positive) is 
      limited new GMT.Menu_Tree (Capacity)
      with null record;
    

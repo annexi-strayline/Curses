@@ -80,7 +80,7 @@ package Curses.UI.Menus is
    -- correct position, and with an appropriate style. The style of 
    -- Canvas.Current_Cursor can be used as a reference, but can also be ignored
    -- if more elaborate styling is needed. It is provided for convenience and
-   -- to support athetic conformity. When Selected is True,
+   -- to support aesthetic conformity. When Selected is True,
    -- Canvas.Current_Cursor shall also reflect the subsystem's suggestion on
    -- how a selected item should be rendered, and could, for example, have the
    -- Inverted style option set to True.
@@ -102,8 +102,9 @@ package Curses.UI.Menus is
       Regenerate,  -- Re-render the entire Menu tree
       Close);      -- Close the Menu
      
-   function Execute (Item: in out Menu_Item_Type)
-                    return After_Execute_Directive is abstract;
+   procedure Execute (Item     : in out Menu_Item_Type;
+                      Directive:    out After_Execute_Directive)
+     is abstract;
    -- Invoked by the menu subsystem when the user selects the particular Item.
    -- If Re_Render is set to True upon return, the menu is not closed, and Item
    -- is re-rendered in-place (though a subsequent call to Item.Render_Label),
@@ -224,9 +225,9 @@ package Curses.UI.Menus is
      is (False);
    
    overriding
-   function  Execute (Item: in out Null_Menu_Item_Type)
-                     return After_Execute_Directive
-     is (Close);
+   procedure  Execute (Item     : in out Null_Menu_Item_Type;
+                       Directive:    out After_Execute_Directive)
+     is null;
    
    overriding
    function  Submenu (Item: in out Null_Menu_Item_Type) return Menu_Type'Class

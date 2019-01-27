@@ -41,7 +41,10 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
+-- This package provides the generic logic to implement any Standard_Tree,
+-- both bounded and unbounded.
+
+private package Curses.UI.Menus.Standard_Trees.Logic is
    
    --------------------------
    -- Generic_Tree_Element --
@@ -162,6 +165,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       
       with function  Allocate (Pool: in out Item_Pool)
                              return GTE.Index_Type is <>;
+      -- Shall return Null_Index is unable to allocated a new item.
       
       with procedure Free (Pool : in out Item_Pool;
                            Index: in     GTE.Index_Type) is <>;
@@ -169,9 +173,8 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       -- referenced by Index after a call to Free, unless it is subsequently
       -- returned by a later call to Allocate
       --
-      -- The implementer shall not modify any other Items of Index as a result
-      -- of calling Free. Tree manipulation logic handles de-linking before
-      -- Freeing
+      -- Free shall not attempt to de-link the item at Index. That is handled
+      -- by this package before calling Free.
       --
       -- Freeing a Null_Index value shall have no effect.
       
@@ -180,7 +183,7 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       
       with function Lookup (Pool : in out Item_Pool;
                             Index: in     GTE.Index_Type)
-                           return Menu_Item_Reference_Type;
+                           return Menu_Item_Reference_Type is <>;
       -- Return a Menu_Item_Reference_Type to a GTE.Tree_Element'Class object
       -- of Pool, referenced by Index. If Index is Null_Index, Reference shall
       -- return Curses.UI.Menus.Null_Menu_Reference
@@ -465,4 +468,4 @@ private package Curses.UI.Menus.Standard_Trees.Core with Preelaborate is
       
    end Generic_Menu_Tree;
    
-end Curses.UI.Menus.Standard_Trees.Core;
+end Curses.UI.Menus.Standard_Trees.Logic;
