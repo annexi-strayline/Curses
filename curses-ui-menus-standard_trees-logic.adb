@@ -41,7 +41,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-package body Curses.UI.Menus.Standard_Trees.Core is
+package body Curses.UI.Menus.Standard_Trees.Logic is
    
    --------------------------
    -- Generic_Tree_Element --
@@ -1164,4 +1164,4 @@ package body Curses.UI.Menus.Standard_Trees.Core is
       end Insert_After;
       
    end Generic_Menu_Tree;
-end Curses.UI.Menus.Standard_Trees.Core;
+end Curses.UI.Menus.Standard_Trees.Logic;
