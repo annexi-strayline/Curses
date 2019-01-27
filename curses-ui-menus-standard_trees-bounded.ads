@@ -50,19 +50,9 @@
 private with Curses.UI.Menus.Standard_Trees.Logic;
 
 generic
-   type Base_Item is limited new Menu_Item_Type with private;
+   type Menu_Item is limited new Menu_Item_Type with private;
    
 package Curses.UI.Menus.Standard_Trees.Bounded is
-   
-   -----------------
-   -- Menu_Cursor --
-   -----------------
-   type Menu_Cursor is new Standard_Cursor with private;
-   
-   ---------------
-   -- Menu_Item --
-   ---------------
-   type Menu_Item is limited new Base_Item with private;
    
    -----------------
    -- Menu_Branch --
@@ -81,13 +71,13 @@ private
    ---------------
    -- Item_Pool --
    ---------------
-   subtype Index_Type    is Integer    range 0 .. Positive'Last;
+   subtype Index_Type is Integer range 0 .. Positive'Last;
 
    Null_Index: constant Index_Type := Index_Type'First;
    
    -- Generic element
    package GTE is new Logic.Generic_Tree_Element
-     (Base_Item  => Base_Item,
+     (Base_Item  => Menu_Item,
       Index_Type => Index_Type,
       Null_Index => Null_Index);
    
@@ -127,9 +117,7 @@ private
       Pool_Parameter => Positive,
       Item_Pool      => Item_Pool);
    
-   type Menu_Item   is limited new GMT.Menu_Item   with null record;
-   type Menu_Cursor is         new GMT.Menu_Cursor with null record;
-   type Menu_Branch is         new GMT.Menu_Branch with null record;
+   type Menu_Branch is new GMT.Menu_Branch with null record;
    
    type Bounded_Menu_Tree (Capacity: Positive) is 
      limited new GMT.Menu_Tree (Capacity)

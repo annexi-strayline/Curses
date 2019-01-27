@@ -709,11 +709,6 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
          procedure First_In_Submenu (Root, Item: in Index_Type) is
             First: Index_Type;
             
-            Root_Ref: Menu_Item_Reference_Type
-              := Lookup (Pool => Our_Tree.Pool, Index => Root);
-            Root_Actual: GTE.Tree_Element
-              renames GTE.Tree_Element (Root_Ref.Ref.all);
-            
             Item_Ref: Menu_Item_Reference_Type
               := Lookup (Pool => Our_Tree.Pool, Index => Item);
             Item_Actual: GTE.Tree_Element
@@ -723,8 +718,21 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             Extract (Item);
             
             -- Retarget Root
-            First := Root_Actual.State.Sub;
-            Root_Actual.State.Sub (Item);
+            if Root = Staging_Branch_Index then
+               First := Our_Tree.Staging.State.Sub;
+               Our_Tree.Staging.State.Sub (Item);
+               
+            else
+               declare
+                  Root_Ref: Menu_Item_Reference_Type
+                    := Lookup (Pool => Our_Tree.Pool, Index => Root);
+                  Root_Actual: GTE.Tree_Element
+                    renames GTE.Tree_Element (Root_Ref.Ref.all);
+               begin
+                  First := Root_Actual.State.Sub;
+                  Root_Actual.State.Sub (Item);
+               end;
+            end if;
             
             -- Relink Item
             Item_Actual.State.Next   (First);
