@@ -378,19 +378,12 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                      Position: Menu_Cursor_Type'Class)
                     return Menu_Cursor_Type'Class;
       
-      
+      -- First --
       overriding
       function First (Iterator: Branch_Iterator) return Menu_Cursor_Type'Class
       is
          Ref_OK     : Boolean    := False;
-         First_Index: Index_Type := Null_Index;
-         
-         Branch_Root_Reference: Menu_Item_Reference_Type 
-           := Lookup (Pool  => Iterator.Branch.Tree.Pool,
-                      Index => Iterator.Branch.Root);
-         
-         Branch_Root: GTE.Tree_Element 
-           renames GTE.Tree_Element (Branch_Root_Reference.Ref.all);
+         First_Index: Index_Type;
          
       begin
          
@@ -398,10 +391,21 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             -- This refers to the "Staging_Branch", which is stored outside of
             -- the pool
             First_Index := Iterator.Branch.Tree.Staging.State.Sub;
+            
          else
-            First_Index := Branch_Root.state.Sub;
             -- For the regular branches
+            declare
+               Branch_Root_Reference: Menu_Item_Reference_Type 
+                 := Lookup (Pool  => Iterator.Branch.Tree.Pool,
+                            Index => Iterator.Branch.Root);
+               
+               Branch_Root: GTE.Tree_Element 
+                 renames GTE.Tree_Element (Branch_Root_Reference.Ref.all);
+            begin
+               First_Index := Branch_Root.state.Sub;
+            end;
          end if;
+         
          
          if First_Index = Null_Index then
             return Null_Menu_Cursor;
@@ -431,6 +435,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
       end First;
       
       
+      -- Next --
       overriding
       function Next (Iterator: Branch_Iterator;
                      Position: Menu_Cursor_Type'Class)
