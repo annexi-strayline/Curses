@@ -574,33 +574,29 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             Item.State.Next   (Null_Index);
             Item.State.Parent (Null_Index);
             
-            -- Link-through Prev or retarget
-            if Prev = Null_Index then
-               -- This indicates that Item was the first on the branch, this
-               -- means we need to retarget Item's Parent to Item.Next
-               -- (If there is no Next, Sub is set to Null_Index, which is also
-               -- correct)
-               
-               if Parent = Staging_Branch_Index then
-                  -- This item is on the Staging_Branch, so we can link it in
-                  -- directly
+            -- Check the Parent node, if it's Submenu points to us, then we
+            -- need to retarget that node to our node
+            if Parent = Staging_Branch_Index then
+               -- Parent is the Staging_Branch
+               if Our_Tree.Staging.State.Sub = Index then
                   Our_Tree.Staging.State.Sub (Next);
-                  
-               else
-                  declare
-                     Parent_Ref: Menu_Item_Reference_Type
-                       := Lookup (Pool  => Our_Tree.Pool,
-                                  Index => Parent);
-                     
-                     Parent_Actual: GTE.Tree_Element renames
-                       GTE.Tree_Element (Parent_Ref.Ref.all);
-                  begin
-                     Parent_Actual.State.Sub (Next);
-                  end;
                end if;
                
             else
-               -- Link Prev -> Next
+               declare
+                  Parent_Ref: Menu_Item_Reference_Type
+                    := Lookup (Pool  => Our_Tree.Pool,
+                               Index => Parent);
+                  
+                  Parent_Actual: GTE.Tree_Element renames
+                    GTE.Tree_Element (Parent_Ref.Ref.all);
+               begin
+                  Parent_Actual.State.Sub (Next);
+               end;
+            end if;
+            
+            -- Link-through Prev, if applicable
+            if Prev /= Null_Index then
                declare
                   Prev_Ref: Menu_Item_Reference_Type
                     := Lookup (Pool  => Our_Tree.Pool,
