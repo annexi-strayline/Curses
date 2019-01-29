@@ -50,21 +50,15 @@
 private with Curses.UI.Menus.Standard_Trees.Logic;
 
 generic
-   type Menu_Item is limited new Menu_Item_Type with private;
+   type Base_Item is limited new Menu_Item_Interface with private;
    
 package Curses.UI.Menus.Standard_Trees.Bounded is
    
-   -----------------
-   -- Menu_Branch --
-   -----------------
-   type Menu_Branch is new Menu_Type with private;
-   -- References a particular Submenu of a tree.
-   
-   ------------------
-   -- Bounded_Tree --
-   ------------------
    type Bounded_Menu_Tree (Capacity: Positive) is limited new Standard_Tree
      with private;
+   
+   -- All Standard_Tree operations, including indexing, always refer to
+   -- underlying items of Base_Item'Class
    
 private
    
@@ -77,7 +71,7 @@ private
    
    -- Generic element
    package GTE is new Logic.Generic_Tree_Element
-     (Base_Item  => Menu_Item,
+     (Base_Item  => Base_Item,
       Index_Type => Index_Type,
       Null_Index => Null_Index);
    
@@ -108,8 +102,8 @@ private
    
    function  Lookup (Pool : in out Item_Pool;
                      Index: in Index_Type)
-                    return Menu_Item_Reference_Type
-     is (Menu_Item_Reference_Type'(Ref => Pool.Data(Index)'Access));
+                    return Menu_Node_Reference
+     is (Menu_Node_Reference'(Ref => Pool.Data(Index)'Access));
 
    -- Generic tree
    package GMT is new Logic.Generic_Menu_Tree

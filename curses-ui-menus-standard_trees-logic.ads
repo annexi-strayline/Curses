@@ -50,7 +50,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
    -- Generic_Tree_Element --
    --------------------------
    generic
-      type Base_Item is limited new Menu_Item_Type with private;
+      type Base_Item is limited new Menu_Item_Interface with private;
       
       type Index_Type is private;
       Null_Index: in Index_Type;
@@ -76,7 +76,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- *  Program_Error: Dereigster_Reference called when the registered
          --                   reference count is zero. This indicates an
          --                   implementation error
-
+         
          
          procedure Activate;
          procedure Deactivate (Ref_Remain: out Natural);
@@ -117,7 +117,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          
          procedure Identity (Tree : in not null Standard_Tree_Access;
                              Index: in Index_Type)
-           with Pre => Index /= Null_Index;
+         with Pre => Index /= Null_Index;
          
          function  Tree  return Standard_Tree_Access;
          function  Index return Index_Type;
@@ -125,7 +125,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- set Identity by providing the element with a reference to the Tree
          -- on which it has membership, as well as its own Index values.
          --
-         -- This identity is required by Menu_Item_Type.Submenu
+         -- This identity is required by Menu_Node_Interface.Submenu
          --
          -- Tree and Index shall never be called on an element that has not
          -- been properly configured with a call to Identity.
@@ -145,13 +145,39 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          
       end Element_State;
       
+      
       ----------------------------------------
-      type Tree_Element is limited new Base_Item with
+      type Tree_Element is tagged;
+      
+      function Null_Processor (Item: in out Tree_Element'Class)
+                              return Menu_Type'Class
+        is (Null_Menu);
+      -- This call-back is implemented in Generic_Menu_Tree to store the
+      -- correct call-back function in the instantiation for a given
+      -- tree, such that invoking Submenu on a Tree_Element will invoke
+      -- the tree-specific logic in that package for rending the correct
+      -- Menu_Type, namely one which tracks active references.
+      --
+      -- This callback is key in facilitating recursive iteration of the
+      -- Tree without explicit cursor manipulation (for all Item of Menu ..)
+      
+      
+      type Tree_Element is limited new Base_Item and Menu_Node_Interface with
          record
-            State: Element_State;
+            State            : Element_State;
+            Submenu_Processor: not null access function 
+              (Item: in out Tree_Element'Class) return Menu_Type'Class
+                := Null_Processor'Access;
          end record;
-
+      
+      -- Submenu --
+      -------------
+      overriding
+      function  Submenu (Item: in out Tree_Element) return Menu_Type'Class
+        is (Item.Submenu_Processor (Item));
+      
    end Generic_Tree_Element;
+   
    
    
    -----------------------
@@ -183,23 +209,14 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       
       with function Lookup (Pool : in out Item_Pool;
                             Index: in     GTE.Index_Type)
-                           return Menu_Item_Reference_Type is <>;
-      -- Return a Menu_Item_Reference_Type to a GTE.Tree_Element'Class object
+                           return Menu_Node_Reference is <>;
+      -- Return a Menu_Node_Reference to a GTE.Tree_Element'Class object
       -- of Pool, referenced by Index. If Index is Null_Index, Reference shall
       -- return Curses.UI.Menus.Null_Menu_Reference
       
    package Generic_Menu_Tree is
    
       use all type GTE.Tree_Element;
-   
-      ---------------
-      -- Menu_Item --
-      ---------------
-      type Menu_Item is new GTE.Tree_Element with null record;
-      
-      overriding
-      function  Submenu (Item: in out Menu_Item) return Menu_Type'Class;
-      
       
       -----------------
       -- Menu_Cursor --
@@ -249,7 +266,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       overriding
       function  Index (Menu  : Menu_Branch; 
                        Cursor: Menu_Cursor_Type'Class) 
-                      return Menu_Item_Reference_Type
+                      return Menu_Node_Reference
         with Inline, Pre => Cursor in Menu_Cursor'Class;
       
       overriding
@@ -266,7 +283,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       overriding
       function Index (Tree    : in out Menu_Tree;
                       Position: in     Standard_Cursor'Class)
-                     return Menu_Item_Reference_Type
+                     return Menu_Node_Reference
         with Inline, Pre => Position in Menu_Cursor'Class;
       
       overriding
@@ -403,7 +420,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          record
             Pool      : Item_Pool (Param);
             Controller: Tree_Controller (Menu_Tree'Access);
-            Staging   : aliased Menu_Item;
+            Staging   : aliased GTE.Tree_Element;
          end record;
       
       Staging_Branch_Index: Index_Type renames Null_Index;
@@ -426,7 +443,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       overriding
       function Index (Tree    : in out Menu_Tree;
                       Position: in     Standard_Cursor'Class)
-                     return Menu_Item_Reference_Type
+                     return Menu_Node_Reference
         is (Lookup (Pool => Tree.Pool, Index => Menu_Cursor (Position).Index));
       -- Note the type conversion is protected by the Precondition
       
@@ -447,7 +464,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       function On_Branch (Position: in     Menu_Cursor;
                           Branch  : in out Menu_Type'Class) 
                          return Boolean
-        is (Menu_Item(Position.Tree.Index (Position).Ref.all).State.Parent
+        is (GTE.Tree_Element (Position.Tree.all(Position).Ref.all).State.Parent
               = Menu_Branch(Branch).Root);
       
       
@@ -456,7 +473,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       overriding
       function  Index (Menu  : Menu_Branch; 
                        Cursor: Menu_Cursor_Type'Class) 
-                      return Menu_Item_Reference_Type
+                      return Menu_Node_Reference
         is (Menu.Tree.Index (Menu_Cursor (Cursor)));
       
       overriding

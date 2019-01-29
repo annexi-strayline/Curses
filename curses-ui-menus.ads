@@ -56,21 +56,23 @@ package Curses.UI.Menus is
    
    pragma Preelaborate (Menus);
    
-   --------------------
-   -- Menu_Item_Type --
-   --------------------
-   type Menu_Item_Type is limited interface;
-   -- Menu_Item_Types, or a reference thereof, provides the necessary
-   -- information for the rending of the item in a menu.
+   -------------------------
+   -- Menu_Item_Interface --
+   -------------------------
+   type Menu_Item_Interface is limited interface;
+   -- This is the "External" interface which the user, implementing a specific
+   -- real menu item type must implement. The intererface focuses on hadling
+   -- rendering and selection of items in a menu.
    --
    -- Making this a limited type, along with the design choices of the
    -- actual interface, allows for some interesting possbilities. One specific
-   -- use-case is having Menu_Items_Types which actually are or contain tasks.
+   -- use-case is having Menu_Items_Types which actually are or contain tasks,
+   -- and thus can be self-managing
    
-   procedure Render_Label (Item    : in out Menu_Item_Type;
+   procedure Render_Label (Item    : in out Menu_Item_Interface;
                            Canvas  : in out Surface'Class;
                            Selected: in     Boolean) is abstract;
-   -- Renders the label of Item to Canvas.
+   -- Renders the label of Item to Canvas. 
    --
    -- Canvas shall be a Surface that is singally and wholy dedicated to the
    -- label of Item, and shall not include any borders rendered by the menu
@@ -92,7 +94,7 @@ package Curses.UI.Menus is
    -- menu subsystem will provide the appropriate Theme cursor, and can thus
    -- use exactly the same code to handle both states.
    
-   function Available (Item: Menu_Item_Type) return Boolean is abstract;
+   function Available (Item: Menu_Item_Interface) return Boolean is abstract;
    -- Shall return True if Item is selectable (ie. False is "grayed-out").
    
    type After_Execute_Directive is 
@@ -102,7 +104,7 @@ package Curses.UI.Menus is
       Regenerate,  -- Re-render the entire Menu tree
       Close);      -- Close the Menu
      
-   procedure Execute (Item     : in out Menu_Item_Type;
+   procedure Execute (Item     : in out Menu_Item_Interface;
                       Directive:    out After_Execute_Directive)
      is abstract;
    -- Invoked by the menu subsystem when the user selects the particular Item.
@@ -110,21 +112,25 @@ package Curses.UI.Menus is
    -- is re-rendered in-place (though a subsequent call to Item.Render_Label),
    -- otherwise the entire menu tree is closed
    
-   -- Submenu --
-   -------------
+   
+   -------------------------
+   -- Menu_Node_Interface --
+   -------------------------
    type Menu_Type is tagged;
-     
-   function  Submenu (Item: in out Menu_Item_Type) return Menu_Type'Class
+   type Menu_Node_Interface is limited interface and Menu_Item_Interface;
+   -- The Menu_Node_Interface is the "Internal" interface which is
+   -- typically implemented by actual menu tree packages which maintain
+   -- a tree of indifidual Menu_Item_Interface-implementing objects, which
+   -- are extended by this type to provide direct Submenu access during
+   -- iteration, for easier recursive iteration.
+   
+   function  Submenu (Item: in out Menu_Node_Interface)
+                     return Menu_Type'Class
      is abstract;
-   -- If Item does not have an associated Submenu, it shall return the
-   -- Null_Submenu predefined constant declared in this package
    
-   ---------------
-   -- Menu_Type --
-   ---------------
-   
-   -- Cursor Type --
-   -----------------
+   ----------------------
+   -- Menu_Cursor_Type --
+   ----------------------
    type Menu_Cursor_Type is new Controlled with null record;
    -- Making this a Controlled type allows for copies of Cursors to
    -- be tracked via some kind of "reference count", which can be used
@@ -150,8 +156,8 @@ package Curses.UI.Menus is
    -- object which may be returned at will.
    
    
-   -- Iterators --
-   ---------------
+   -- Iterator --
+   --------------
    package Menu_Iterators is new Ada.Iterator_Interfaces 
      (Cursor      => Menu_Cursor_Type'Class,
       Has_Element => Class_Has_Element);
@@ -172,24 +178,26 @@ package Curses.UI.Menus is
    Null_Iterator: constant Null_Iterator_Type := (others => <>);
    
    
-   -- Reference Types --
-   ---------------------
-   type Menu_Item_Reference_Type (Ref: not null access Menu_Item_Type'Class) is
-     null record
-   with Implicit_Dereference => Ref;
+   -------------------------
+   -- Menu_Node_Reference --
+   -------------------------
+   type Menu_Node_Reference
+     (Ref: not null access Menu_Node_Interface'Class) is null record
+     with Implicit_Dereference => Ref;
    
-   
-   ----------------------------------------
+   ---------------
+   -- Menu_Type --
+   ---------------
    type Menu_Type is new Controlled with null record
      with Variable_Indexing => Index,
           Default_Iterator  => Iterate,
-          Iterator_Element  => Menu_Item_Type'Class;
+          Iterator_Element  => Menu_Node_Interface'Class;
    -- Menu_Type container types represent a single linear vector of 
    -- Menu_Item_Type'Class objects.
      
    function  Index          (Menu  : Menu_Type; 
                              Cursor: Menu_Cursor_Type'Class) 
-                            return Menu_Item_Reference_Type;
+                            return Menu_Node_Reference;
                        
    function  Iterate        (Menu: Menu_Type) 
                             return Menu_Iterators.Forward_Iterator'Class
@@ -212,7 +220,8 @@ package Curses.UI.Menus is
    
    -- Null_Menu_Item_Type --
    -------------------------
-   type Null_Menu_Item_Type is new Menu_Item_Type with null record;
+   type Null_Menu_Item_Type is limited new Menu_Node_Interface 
+     with null record;
    
    overriding
    procedure Render_Label (Item    : in out Null_Menu_Item_Type;
@@ -237,7 +246,7 @@ package Curses.UI.Menus is
    -- Giving an access to this object is always safe since it contains no data,
    -- and has the same lifetime as the partition.
    
-   Null_Menu_Reference: constant Menu_Item_Reference_Type
+   Null_Menu_Reference: constant Menu_Node_Reference
      := (Ref => Null_Menu_Item'Access);
    
    
@@ -250,7 +259,7 @@ package Curses.UI.Menus is
    ---------------
    function  Index (Menu  : Menu_Type; 
                     Cursor: Menu_Cursor_Type'Class) 
-                   return Menu_Item_Reference_Type
+                   return Menu_Node_Reference
      is (Null_Menu_Reference);
 
       

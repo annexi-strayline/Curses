@@ -80,7 +80,7 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    
    function Index (Tree    : in out Standard_Tree;
                    Position: in     Standard_Cursor'Class)
-                  return Menu_Item_Reference_Type
+                  return Menu_Node_Reference
      is abstract
      with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Returns a reference to an actual Item in the tree.
