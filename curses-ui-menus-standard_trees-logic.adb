@@ -949,7 +949,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
            with Inline;
          
          procedure Delete_Branch is new Generic_Iterate_Branch
-           (Process => Deactivate_Item)
+           (Process => Delete_Item)
            with Inline;
          
          ----------------------------------------
