@@ -762,7 +762,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
          begin
             
             -- Verify that After's Parent is actually Root
-            if After_Actual.State.Sub /= Root then
+            if After_Actual.State.Parent /= Root then
                Success := False;
             else
                Insert_After (Item => Item, After => After);
@@ -1092,9 +1092,11 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             
             Next_Selector: Menu_Cursor;
             
-            Add_OK: Boolean := False;
+            Add_OK           : Boolean  := False;
+            Add_Failure      : Natural  := 0;
+            Give_Up_Threshold: constant := 100;
          begin
-              Try_Append: loop
+            Try_Append: loop
                -- First see if there is anything on this branch at all
                if not Last_Selector.Has_Element then
                   
@@ -1103,12 +1105,12 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                   -- been added since we called Iterator.First
                   Tree.Controller.First_In_Submenu
                     (Root => Branch_Actual.Root,
-                     Item => Last_Selector.Index);
+                     Item => Item.Index);
                   
                   return;
                end if;
                
-                 Seek_End: loop
+               Seek_End: loop
                   Next_Selector := Menu_Cursor (Iterator.Next (Last_Selector));
                   exit Seek_End when not Next_Selector.Has_Element;
                   
@@ -1129,6 +1131,14 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                -- has been moved to another branch between Seek_End and the
                -- attempt to append Item. Therefore we need to do another
                -- seek attempt.
+               
+               -- It is possible, but extremely unlikely, to have a deadlock
+               -- here. This keeps us working at least partially
+               Add_Failure := Add_Failure + 1;
+               if Add_Failure > Give_Up_Threshold then
+                  raise Program_Error with 
+                    "Append failed due to an unstable target branch";
+               end if;
             end loop Try_Append;
          end;
       end Append;

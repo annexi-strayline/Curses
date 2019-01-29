@@ -135,12 +135,16 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                      Branch  : in out Menu_Type'Class;
                      Position: in out Standard_Cursor'Class)
      is abstract
-       with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+     with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Appends Item to Branch. If Position denotes an Item on a different
    -- branch, the item is moved to Branch.
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated
    -- *  Constraint_Error: Branch does not belong to Tree.
+   -- *  Program_Error   : A deadlock occured when trying to insert Position to
+   --                      the end of branch. The attempt was aborted. This
+   --                      indicates runaway modification to items on
+   --                      Branch
    
    procedure Prepend (Tree    : in out Standard_Tree;
                       Branch  : in out Menu_Type'Class;
