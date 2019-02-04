@@ -41,7 +41,26 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Debug; use Debug;
+
 package body Curses.UI.Menus.Standard_Trees.Bounded is
+   
+   
+   protected body Avail_Counter is
+      
+      function Available return Natural is (Avail);
+      
+      procedure Increase is
+      begin
+         Avail := Avail + 1;
+      end Increase;
+   
+      procedure Decrease is
+      begin
+         Avail := Avail - 1;
+      end;
+   
+   end Avail_Counter;
    
    use type GTE.Tree_Element;
    
@@ -51,7 +70,7 @@ package body Curses.UI.Menus.Standard_Trees.Bounded is
    function  Allocate (Pool: in out Item_Pool) return Index_Type is
       New_Item_Index: Index_Type;
    begin
-
+      
       if Pool.Recycle_List /= Null_Index then
          -- Always Recycle first.
          New_Item_Index := Pool.Recycle_List;
@@ -73,6 +92,8 @@ package body Curses.UI.Menus.Standard_Trees.Bounded is
          New_Item_Index := Null_Index;
       end if;
       
+      Avail_Counter.Decrease;
+      
       return New_Item_Index;
    end Allocate;
    
@@ -82,6 +103,7 @@ package body Curses.UI.Menus.Standard_Trees.Bounded is
    procedure Free (Pool : in out Item_Pool;
                    Index: in     Index_Type)
    is begin
+      
       -- We are required to explicitly ignore Null_Index values
       if Index = Null_Index then
          return;
@@ -91,6 +113,9 @@ package body Curses.UI.Menus.Standard_Trees.Bounded is
       Pool.Data(Index).State.Next (Pool.Recycle_List);
       Pool.Recycle_List := Index;
       -- The list is always linked forwards only
+      
+      Avail_Counter.Increase;
+      
    end Free;
    
    

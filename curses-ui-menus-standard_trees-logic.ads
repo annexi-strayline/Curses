@@ -46,19 +46,26 @@
 
 private package Curses.UI.Menus.Standard_Trees.Logic is
    
+   pragma Assertion_Policy (Check);
+   
    --------------------------
    -- Generic_Tree_Element --
    --------------------------
    generic
       type Base_Item is limited new Menu_Item_Interface with private;
       
-      type Index_Type is private;
+      type Index_Type is range <>; --private;
       Null_Index: in Index_Type;
       -- User-provided Tree indexing type, used for link management
       
    package Generic_Tree_Element is
       
       protected type Element_State is
+         
+         procedure Reset;
+         -- Reset the state to the default values (initial values in the
+         -- private part)
+
          
          procedure Register_Reference (Success: out Boolean);
          procedure Deregister_Reference;
@@ -102,7 +109,6 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          
          procedure Next (Index: in Index_Type);
          procedure Prev (Index: in Index_Type);
-         procedure Link (Next, Prev: in Index_Type);
          
          function  Sub  return Index_Type;
          procedure Sub  (Index: in Index_Type);
@@ -214,6 +220,8 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       -- of Pool, referenced by Index. If Index is Null_Index, Reference shall
       -- return Curses.UI.Menus.Null_Menu_Reference
       
+      with function Debug_Lookup (Index: in GTE.Index_Type) return String is <>;
+      
    package Generic_Menu_Tree is
    
       use all type GTE.Tree_Element;
@@ -242,10 +250,16 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
         with Inline, Pre => Tree in Menu_Tree'Class;
       
       overriding
-      function On_Branch (Position: in     Menu_Cursor;
-                          Branch  : in out Menu_Type'Class) 
+      function On_Branch (Position: Menu_Cursor;
+                          Branch  : Menu_Type'Class) 
                          return Boolean
         with Inline, Pre => Branch in Menu_Branch'Class;
+      
+      overriding
+      function Progenitor_Of_Branch (Trial_Progenitor: Menu_Cursor;
+                                     Trial_Descendent: Menu_Type'Class) 
+                                    return Boolean
+        with Pre => Trial_Descendent in Menu_Branch'Class;
       
       
       -----------------
@@ -293,7 +307,8 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       
       overriding
       function New_Item (Tree: aliased in out Menu_Tree)
-                        return Standard_Cursor'Class;
+                        return Standard_Cursor'Class
+        with Post => New_Item'Result in Menu_Cursor'Class;
       
       overriding
       procedure Delete (Tree    : in out Menu_Tree;
@@ -304,26 +319,36 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       procedure Append (Tree    : in out Menu_Tree;
                         Branch  : in out Menu_Type'Class;
                         Position: in out Standard_Cursor'Class)
-        with Pre => Branch in Menu_Branch'Class;
+        with Pre => Branch in Menu_Branch'Class
+                  and then Position in Menu_Cursor'Class;
       
       overriding
       procedure Prepend (Tree    : in out Menu_Tree;
                          Branch  : in out Menu_Type'Class;
                          Position: in out Standard_Cursor'Class)
-        with Pre => Branch in Menu_Branch'Class;
+        with Pre => Branch in Menu_Branch'Class
+                  and then Position in Menu_Cursor'Class;
       
       overriding
       procedure Insert_Before (Tree    : in out Menu_Tree;
+                               Branch  : in out Menu_Type'Class;
                                Before  : in     Standard_Cursor'Class;
-                               Position: in out Standard_Cursor'Class);
+                               Position: in out Standard_Cursor'Class)
+        with Pre => Branch in Menu_Branch'Class
+                  and then Before   in Menu_Cursor'Class
+                  and then Position in Menu_Cursor'Class;
       -- Note that the class-wide preconditions call on On_Tree for each
       -- Cursor, which implicitly will verify that Before and Position are
       -- Menu_Cursor'Class via On_Tree's precondition
       
       overriding
       procedure Insert_After (Tree    : in out Menu_Tree;
+                              Branch  : in out Menu_Type'Class;
                               After   : in out Standard_Cursor'Class;
-                              Position: in out Standard_Cursor'Class);
+                              Position: in out Standard_Cursor'Class)
+        with Pre => Branch in Menu_Branch'Class
+                  and then After    in Menu_Cursor'Class
+                  and then Position in Menu_Cursor'Class;
       
    private
       
@@ -372,7 +397,25 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          
          -- Element Splicing --
          ----------------------
-         procedure Extract (Index: Index_Type);
+         -- Due to the task-safe requirements of the Tree (unfortunately),
+         -- Progenitor_Of_Branch is checked again inside all splicing
+         -- operations except for Extract. (That Before/After
+         --
+         -- This will most times result in this condition being checked twice,
+         -- due to a precondition assertions. Unfortunately, the task-safe
+         -- requirements of menu trees means we cannot assume a stable tree
+         -- unless we are operating within a Tree_Controller protected
+         -- operation, and thus the check needs to be made again under such a
+         -- protected condition. Though the extra processing is not very
+         -- efficient, menus really are not expected to be changed that
+         -- frequently. Safety from memory leaks resulting from inaccessible
+         -- island trees due to sub-tree roots being inserted inside of
+         -- themselves is more important than thrashing a menu quickly.
+         --
+         -- These checks are implemented as Assert pragmas, and 
+         -- Assertion_Error exceptions are propegated normally
+         
+         procedure Extract (Item: in out GTE.Tree_Element);
          -- Cuts Index out from it's list, setting Prev.Next -> Next and
          -- Next.Prev -> Prev. If Index is the first item in a Submenu, that
          -- Parent item's Submenu is retargeted to Next.
@@ -381,36 +424,29 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          --
          -- The item's submenu is not modified.
          
-         procedure Insert_Before (Item, Before: Index_Type);
-         procedure Insert_After  (Item, After : Index_Type);
+         procedure Insert_Before (Item  : in out GTE.Tree_Element;
+                                  Branch: in     Menu_Branch;
+                                  Before: in     Menu_Cursor);
+         
+         procedure Insert_After  (Item  : in out GTE.Tree_Element;
+                                  Branch: in     Menu_Branch;
+                                  After : in     Menu_Cursor);
          -- Relocates From to Before/After, manipulating the links accordingly.
          -- Item is Extracted first.
+         --
+         -- Before/After must be on Branch - This is rechecked with an
+         -- Assert pragma, since it may have changed since the public
+         -- precondition
          
-         -- Splicing subprograms do not check for Null_Index on any parameters.
-         -- These checks are handled by Preconditions for the public operations
-         -- that make use of the operations.
          
-         -- Submenu Operations
-         
-         procedure First_In_Submenu (Root, Item: in Index_Type);
+         procedure First_In_Branch (Item  : in out GTE.Tree_Element;
+                                    Branch: in     Menu_Branch);
          -- Atomic operation used by Menu_Tree.Append and .Prepend
          --
-         -- Atomically installs/inserts Item as the first item for the
-         -- Submenu Branch rooted at Root. 
-         -- Item is Extracted first.
-         
-         procedure Next_In_Submenu (Root, Item, After: in     Index_Type;
-                                    Success          :    out Boolean);
-         -- Atomic operation used by Menu_Tree.Append
-         --
-         -- Atomically installs/inserts Item as the next item for After on
-         -- the Submenu rooted on Root.
-         -- Item is Extracted first.
-         --
-         -- Unlike Insert_After, Next_In_Submenu specifically checks that 
-         -- After is still on the Submenu of Root on entry before proceeeding. 
-         -- If it is not, or if any of Root, After, or Item equal, Null_Index
-         -- Success is set to False and no action is taken.
+         -- Calls Insert_Before with Before set to the first item Branch,
+         -- ensuring that the first item in the Branch before Item gets
+         -- inserted doesn't suddenly get moved to another branch before
+         -- the insert happens.
          
       end Tree_Controller;
       
@@ -461,8 +497,8 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
         is (Position.Tree = Menu_Tree(Tree)'Unchecked_Access);
       
       overriding
-      function On_Branch (Position: in     Menu_Cursor;
-                          Branch  : in out Menu_Type'Class) 
+      function On_Branch (Position: Menu_Cursor;
+                          Branch  : Menu_Type'Class) 
                          return Boolean
         is (GTE.Tree_Element (Position.Tree.all(Position).Ref.all).State.Parent
               = Menu_Branch(Branch).Root);

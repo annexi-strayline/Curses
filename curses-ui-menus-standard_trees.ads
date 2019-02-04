@@ -45,6 +45,8 @@ with Ada.Containers;
 
 package Curses.UI.Menus.Standard_Trees with Preelaborate is
    
+   pragma Assertion_Policy (Check);
+   
    Capacity_Error: exception renames Ada.Containers.Capacity_Error;
    
    ---------------------
@@ -59,21 +61,31 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    function On_Tree (Position: in     Standard_Cursor;
                      Tree    : in out Standard_Tree'Class)
                     return Boolean is (False);
-   -- Returns True if and only if Cursor denotes an item on Tree
+   -- Returns True if and only if Cursor denotes an item on Tree. Note that
+   -- Tree must be of mode in out to allow access values to be compared in an
+   -- expression function.
    
    not overriding
-   function On_Branch (Position: in     Standard_Cursor;
-                       Branch  : in out Menu_Type'Class) 
+   function On_Branch (Position: Standard_Cursor;
+                       Branch  : Menu_Type'Class) 
                       return Boolean is (False);
    -- Returns True if and only if Cursor denotes an item on Branch
    
    
+   not overriding
+   function Progenitor_Of_Branch (Trial_Progenitor: Standard_Cursor;
+                                  Trial_Descendent: Menu_Type'Class) 
+                                 return Boolean is (True);
+   -- Returns True if Trial_Progenitor is the root of a Sub that denotes a
+   -- sub-tree which ultimately contains the branch Trail_Descendent. This is
+   -- used to protect Standard_Tree insertion operations from inserting a
+   -- branch root into it's own sub-tree, which would make a black-hole.
    
    -------------------
    -- Standard_Tree --
    -------------------
    type Standard_Tree is limited interface
-     with Variable_Indexing => Index;
+   with Variable_Indexing => Index;
    -- Standard_Tree represents a collection of Items and Branches (submenus).
    -- The Standard_Tree provides an implicit "Main_Menu" branch, as well as
    -- allocation and deletion of Items and Branches throughout the Tree.
@@ -82,7 +94,7 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                    Position: in     Standard_Cursor'Class)
                   return Menu_Node_Reference
      is abstract
-     with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+   with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Returns a reference to an actual Item in the tree.
    
    function Staging_Branch (Tree: aliased in out Standard_Tree)
@@ -105,7 +117,7 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    procedure Delete (Tree    : in out Standard_Tree;
                      Position: in out Standard_Cursor'Class)
      is abstract
-       with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+   with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Deletes (deallocates) the Item at Position.
    --
    -- If the Position donotes a Submenu, the Submenu is iterated, with
@@ -135,9 +147,15 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                      Branch  : in out Menu_Type'Class;
                      Position: in out Standard_Cursor'Class)
      is abstract
-     with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+   with Pre'Class => Position.Has_Element 
+                     and then Position.On_Tree (Tree)
+                     and then not Position.Progenitor_Of_Branch (Branch);
    -- Appends Item to Branch. If Position denotes an Item on a different
    -- branch, the item is moved to Branch.
+   --
+   -- Position (obviously) cannot be the root of a sub-tree which contains
+   -- Branch.
+   --
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated
    -- *  Constraint_Error: Branch does not belong to Tree.
@@ -150,40 +168,58 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
                       Branch  : in out Menu_Type'Class;
                       Position: in out Standard_Cursor'Class)
      is abstract
-       with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
+   with Pre'Class => Position.Has_Element 
+                     and then     Position.On_Tree (Tree)
+                     and then not Position.Progenitor_Of_Branch (Branch);
    -- Prepends Item to Branch. If Position denotes an Item on a different
    -- branch, the item is moved to Branch.
+   -- Position (obviously) cannot be the root of a sub-tree which contains
+   -- Branch.
+   --
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated
    -- *  Constraint_Error: Branch does not belong to Tree.
    
    procedure Insert_Before (Tree    : in out Standard_Tree;
+                            Branch  : in out Menu_Type'Class;
                             Before  : in     Standard_Cursor'Class;
                             Position: in out Standard_Cursor'Class)
      is abstract
-       with Pre'Class => (Before.Has_Element and then Position.Has_Element)
-                         and then (Before.On_Tree (Tree) 
-                                   and then Position.On_Tree (Tree));
-   -- Inserts Position ahead of Before. If Before is on a different Branch than
-   -- Position, Position is moved to that branch.
+     with Pre'Class => (Before.Has_Element and Position.Has_Element)
+                     and then (Before.On_Tree (Tree) 
+                                 and Position.On_Tree (Tree))
+                     and then Before.On_Branch (Branch)
+                     and then not Position.Progenitor_Of_Branch (Branch);
+   -- Inserts Position ahead of Before. If Position is on a different branch
+   -- than Before, Position is moved to that branch.
+   -- Position (obviously) cannot be the root of a sub-tree which contains
+   -- Branch.
+   --
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated
    
    procedure Insert_After (Tree    : in out Standard_Tree;
+                           Branch  : in out Menu_Type'Class;
                            After   : in out Standard_Cursor'Class;
                            Position: in out Standard_Cursor'Class)
      is abstract
-       with Pre'Class => (After.Has_Element and then Position.Has_Element)
-                         and then (After.On_Tree (Tree)
-                                  and then Position.On_Tree (Tree));
-   -- Inserts Position ahead of the element at Position.
+     with Pre'Class => (After.Has_Element and Position.Has_Element)
+                     and then (After.On_Tree (Tree) 
+                                 and Position.On_Tree (Tree))
+                     and then After.On_Branch (Branch)
+                     and then not Position.Progenitor_Of_Branch (Branch);
+   -- Inserts Position after After. If Position is on a different branch
+   -- than After, Position is moved to that branch.
+   --
+   -- Position (obviously) cannot be the root of a sub-tree which contains
+   -- Branch.
+   --
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated
-   
    
    -- Standard_Tree_Access --
    --------------------------
    type Standard_Tree_Access is access all Standard_Tree'Class
-     with Storage_Size => 0;
+   with Storage_Size => 0;
    
 end Curses.UI.Menus.Standard_Trees;

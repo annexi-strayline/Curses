@@ -60,6 +60,15 @@ package Curses.UI.Menus.Standard_Trees.Bounded is
    -- All Standard_Tree operations, including indexing, always refer to
    -- underlying items of Base_Item'Class
    
+   protected Avail_Counter is
+      function Available return Natural;
+      
+      procedure Increase;
+      procedure Decrease;
+   private
+      Avail: Natural := 1_000_000;
+   end Avail_Counter;
+   
 private
    
    ---------------
@@ -104,7 +113,12 @@ private
                      Index: in Index_Type)
                     return Menu_Node_Reference
      is (Menu_Node_Reference'(Ref => Pool.Data(Index)'Access));
+   
+   function Debug_Lookup (Index: in Index_Type) return String 
+     is (Index_Type'Image (Index));
+   
 
+   
    -- Generic tree
    package GMT is new Logic.Generic_Menu_Tree
      (GTE            => GTE,
