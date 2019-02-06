@@ -97,8 +97,6 @@ package body Test_Pack.Recursive_Hammer is
          
          loop
             Last_Directive := Random (Director);
-            Debug_Line ("Hammer " & Positive'Image (Our_Index) & ": " &
-                          Random_Directive'Image (Last_Directive));
             case Last_Directive is
                when Append_New =>
                   Current_Item := Tree.New_Item;
@@ -218,7 +216,6 @@ package body Test_Pack.Recursive_Hammer is
          
       begin
          loop
-            Debug_Line ("--- Hammer " & Positive'Image (Our_Index) & " ---");
             Recurse_Branch (Root           => Root_Node,
                             Last_Directive => Running_Directive);
             
@@ -226,18 +223,13 @@ package body Test_Pack.Recursive_Hammer is
             -- "Delete_Current_Branch" when refering to the Root branch, or is
             -- "Delete_All", both are logicially equivilient
             
-            Debug_Line ("Hammer " & Positive'Image (Our_Index) & ": Deleting root...");
-            --Tree.Delete (Root_Node);
-            Debug_Line ("   Done - Hammer " & Positive'Image (Our_Index));
+            Tree.Delete (Root_Node);
             
             select
                accept Kill;
-               Debug_Line ("Hammer " & Positive'Image (Our_Index) & ": " & 
-                             "Kill - exiting.");
                exit;
             else
-               null;
-               --Root_Node := Tree.New_Item;
+               Root_Node := Tree.New_Item;
             end select;
          end loop;
       end;
