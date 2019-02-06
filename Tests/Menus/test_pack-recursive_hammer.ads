@@ -7,8 +7,8 @@ package Test_Pack.Recursive_Hammer is
    
    pragma Assertion_Policy (Check);
    
-   Hammers  : constant := 2;
-   Crunchers: constant := 1;
+   Hammers  : constant := 6;
+   Crunchers: constant := 2;
    Tree_Size: constant := 1_000_000;
    
    Tree: Menu_Tree (Tree_Size);

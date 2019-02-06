@@ -65,24 +65,46 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          procedure Reset;
          -- Reset the state to the default values (initial values in the
          -- private part)
+         
+         
+         entry     Register_Reference (Success: out Boolean);
+         -- Increases the active reference count for the element, if the
+         -- element is active and has a valid Index.
+         --
+         -- If the element is not active, Register_Reference waits until the 
+         -- element has been re-activated or reset (Index returns Null_Index).
+         -- This is to ensure consistency during active deletion of large 
+         -- submenu sub-trees which may require iterative Deactivation of a 
+         -- large number of elements before deletion can be deemed safe. 
+         -- In this case, temporary Cursors should wait until this process
+         -- completes before assuming an error has occured.
+         --
+         -- If the reference cannot be registered, Success is set to False,
+         -- and the operation has no effect. The following conditions result
+         -- in Success = False:
+         --   1. Item has been Reset (Index = Null_Index)
+         --   2. Item is Active, but has already registered the maximum number
+         --      of references
+         --
+         -- Register_Reference calls can be made with timed entry calls
+         -- to protect against unlikely deadlocks. Timeouts should generally
+         -- act as if the call completed with "Success = False".
+         --
+         -- -- Suppresses All Exceptions --
 
          
-         procedure Register_Reference (Success: out Boolean);
          procedure Deregister_Reference;
-         -- Increases or decreases the active reference count for the Element
-         -- If Register_Reference returns Success = False, this indicates that
-         -- the Item may not take additional references at this time.
+         -- Decreases the active reference count for the Element.
          --
-         -- An unsuccessful Registration indicates that the Element is being
-         -- removed from the Tree, or that the number of References has reached
-         -- Natural'Last, and thus aborting the creation of the reference is
-         -- the only realistic course of action. This situation generally
-         -- indicates a problem with the user's program.
+         -- Shall not be called on an item with a Null_Index, or that is
+         -- Deactivated.
          --
          -- -- Explicit Raises --
          -- *  Program_Error: Dereigster_Reference called when the registered
-         --                   reference count is zero. This indicates an
-         --                   implementation error
+         --                   reference count is zero, or when the item is
+         --                   deactivated and/or has an Index value of
+         --                   Null_Index - all such conditions indicate a
+         --                   logical implementation error.
          
          
          procedure Activate;
@@ -103,6 +125,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- *  Program_Error: Activate invoked on an element that is already
          --                   Active (this should not happen, and would
          --                   indicate an implementation error)
+         
          
          function  Next return Index_Type;
          function  Prev return Index_Type;

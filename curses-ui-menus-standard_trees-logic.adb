@@ -71,9 +71,13 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             Self_Ptr   := Null_Index;
          end Reset;
          
-         procedure Register_Reference (Success: out Boolean) is
+         entry Register_Reference (Success: out Boolean) 
+           when Active or else Self_Ptr = Null_Index is
          begin
-            if Active and then Refs < Natural'Last then
+            if Self_Ptr = Null_Index then
+               -- Item has been reset.
+               Success := False;
+            elsif Refs < Natural'Last then
                Refs    := Refs + 1;
                Success := True;
             else
@@ -154,8 +158,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
    -----------------------
    package body Generic_Menu_Tree is
       
-      
-      
+      Common_Entry_Timeout: constant Duration := 5.0;
       
       --
       -- Internal Infrastructure
@@ -186,8 +189,13 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
            renames GTE.Tree_Element (Item_Ref.Ref.all);
          
       begin
-         Item.State.Register_Reference (Ref_OK);
-         return Ref_OK;
+         select
+            Item.State.Register_Reference (Ref_OK);
+            return Ref_OK;
+         or
+            delay Common_Entry_Timeout;
+            return False;
+         end select;
       end Common_Add_Ref;
       
       
@@ -284,8 +292,14 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                                return Menu_Cursor
       with Inline is
          Ref_OK: Boolean := False;
+         
       begin
-         Item.State.Register_Reference (Ref_OK);
+         select
+            Item.State.Register_Reference (Ref_OK);
+         or
+            delay Common_Entry_Timeout;
+            Ref_OK := False;
+         end select;
          
          if Ref_OK then
             return Menu_Cursor'(Standard_Cursor with
@@ -411,26 +425,36 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
       function Submenu_Processor (Item: in out GTE.Tree_Element'Class) 
                                  return Menu_Type'Class
       is
-         Tree      : Tree_Access := null;
-         Ref_OK    : Boolean     := False;
+         Tree  : Tree_Access;
+         Ref_OK: Boolean;
          
       begin
          -- First check for any invalid conditions which require us to return
          -- a regular "null menu"
          if Item.State.Tree.all not in Menu_Tree'Class then
             return Null_Menu;
+            -- We'd prefer this check to be "harmless" (appear as an empty
+            -- submenu) than to raise an Assertion_Error;
          end if;
          
          Tree := Tree_Access (Item.State.Tree);
          
-         Item.State.Register_Reference (Ref_OK);
+         select
+            Item.State.Register_Reference (Ref_OK);
+         or
+            delay Common_Entry_Timeout;
+            Ref_OK := False;
+         end select;
          
          if not Ref_OK then
+            -- This item cannot be legally referenced, so we have to consider
+            -- it DoA
             return Null_Menu;
+            
+         else
+            return Menu_Branch'(Menu_Type with 
+                                Tree => Tree, Root => Item.State.Index);
          end if;
-         
-         return Menu_Branch'(Menu_Type with 
-                             Tree => Tree, Root => Item.State.Index);
          
       exception
          when others =>
@@ -862,12 +886,16 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             pragma Assertion_Policy (Check);
             
             First_Index: Index_Type;
-            
+            Item_Index : Index_Type := Item.State.Index;
          begin
+            -- Checks
+            pragma Assert (not Progenitor_Of_Branch (Item, Branch));
+            
+            Extract (Item);
+            
             -- Obtain the index for the first item of Branch (if any).
             if Branch.Root = Staging_Branch_Index then
                First_Index := Our_Tree.Staging.State.Sub;
-               Our_Tree.Staging.State.Sub (Item.State.Index);
                
             else
                declare
@@ -880,27 +908,42 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                end;
             end if;
             
+            
             -- Now insert Item to the first of Branch
             if First_Index /= Null_Index then
-               -- If a first item exists, we simply execute Insert_Before
+               -- There is already something on this branch, so we need to
+               -- retarget the parent, and then also set the item to point
+               -- back at the new item
+               
+               -- Link the item with First_Index
+               Item.State.Parent (Branch.Root);
+               Item.State.Next   (First_Index);
+               
                declare
-                  Before_Ref: Menu_Node_Reference
+                  First_Item_Ref: Menu_Node_Reference
                     := Lookup (Pool => Our_Tree.Pool, Index => First_Index);
-                  Before: GTE.Tree_Element
-                    renames GTE.Tree_Element (Before_Ref.Ref.all);
+                  First_Item: GTE.Tree_Element
+                    renames GTE.Tree_Element (First_Item_Ref.Ref.all);
                begin
-                  Insert_Before 
-                    (Item   => Item,
-                     Branch => Branch,
-                     Before => Generate_Cursor (Before));
+                  First_Item.State.Prev (Item_Index);
                end;
                
-            else
-               -- Otherwise, we can just go-ahead and add it directly ourselves
-               -- (we also need to do the necessary checks)
-               pragma Assert (not Progenitor_Of_Branch (Item, Branch));
+               -- Retarget Parent to the Item
+               if Branch.Root = Staging_Branch_Index then
+                  Our_Tree.Staging.State.Sub (Item_Index);
+               else
+                  declare
+                     Root_Ref: Menu_Node_Reference
+                       := Lookup (Pool => Our_Tree.Pool, Index => Branch.Root);
+                     Root_Actual: GTE.Tree_Element
+                       renames GTE.Tree_Element (Root_Ref.Ref.all);
+                  begin
+                     Root_Actual.State.Sub (Item_Index);
+                  end;
+               end if;
                
-               Extract (Item);
+            else
+               -- No items on this branch, just drop Item right in
                
                Item.State.Parent (Branch.Root);
                
@@ -916,7 +959,6 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                      Branch_Root.State.Sub (Item.State.Index);
                   end;
                end if;
-               
             end if;
          end First_In_Branch;
       end Tree_Controller;
@@ -1154,11 +1196,6 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
            renames GTE.Tree_Element (Root_Item_Ref.Ref.all);
          
       begin
---         Debug_Line ("Delete Enter - Root Index:" & Debug_Lookup (Root_Item.State.Index) &
---                       " Parent:" & Debug_Lookup (Root_Item.State.Parent) &
---                       " Sub:" & Debug_Lookup (Root_Item.State.Sub) &
---                       " Next:" & Debug_Lookup (Root_Item.State.Next) &
---                       " Prev:" & Debug_Lookup (Root_Item.State.Prev));
          -- By virtue of the preconditions, we know that we have an active
          -- element that is on Tree.
          
