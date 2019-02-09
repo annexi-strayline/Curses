@@ -68,10 +68,10 @@ package body Test_Pack.Recursive_Hammer is
       end Dec;
       
       -- The primary logic
-      procedure Recurse_Branch (Root          : in     Standard_Cursor'Class;
+      procedure Recurse_Branch (Root          : in out Standard_Cursor'Class;
                                 Last_Directive:    out Random_Directive);
       
-      procedure Recurse_Branch (Root          : in     Standard_Cursor'Class;
+      procedure Recurse_Branch (Root          : in out Standard_Cursor'Class;
                                 Last_Directive:    out Random_Directive)
       is
          This_Branch : Menu_Type'Class       := Tree(Root).Submenu;

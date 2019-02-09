@@ -29,14 +29,12 @@ package Test_Pack.Bounded_Tree is
    
    procedure Set_Label (Item: in out Menu_Item; Label: in String);
    
-   
    ---------------
    -- Menu_Tree --
    ---------------
    type Menu_Tree (Capacity: Positive) is
      limited new Curses.UI.Menus.Standard_Trees.Standard_Tree with private;
    
-   function Avail return Natural;
    
 private
    
@@ -50,8 +48,6 @@ private
    
    type Menu_Tree (Capacity: Positive) is
      limited new Bounded_Tree.Bounded_Menu_Tree (Capacity) with null record;
-   
-   function Avail return Natural is (Bounded_Tree.Avail_Counter.Available);
    
 end Test_Pack.Bounded_Tree;
    

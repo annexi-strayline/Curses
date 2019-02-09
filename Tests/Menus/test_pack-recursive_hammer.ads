@@ -49,10 +49,10 @@ package Test_Pack.Recursive_Hammer is
           Deleted_Branches
             => Left.Deleted_Branches    + Right.Deleted_Branches,
           
-          Current_Depth
-            => Left.Current_Depth       + Right.Current_Depth,
-          Max_Depth
-            => Left.Max_Depth           + Right.Max_Depth,
+          Current_Depth => Right.Current_Depth,
+          Max_Depth => (if Right.Max_Depth > Left.Max_Depth then 
+                           Right.Max_Depth 
+                        else Left.Max_Depth),
           
           Append_New_Count
             => Left.Append_New_Count    + Right.Append_New_Count,
@@ -81,8 +81,8 @@ package Test_Pack.Recursive_Hammer is
           Deleted_Nodes       => Left.Deleted_Nodes       / Right,
           Deleted_Branches    => Left.Deleted_Branches    / Right,
           
-          Current_Depth       => Left.Current_Depth       / Right,
-          Max_Depth           => Left.Max_Depth           / Right,
+          Current_Depth       => Left.Current_Depth,
+          Max_Depth           => Left.Max_Depth,
           
           Append_New_Count    => Left.Append_New_Count    / Right,
           Prepend_New_Count   => Left.Prepend_New_Count   / Right,

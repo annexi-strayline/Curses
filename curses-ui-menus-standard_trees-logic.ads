@@ -66,7 +66,6 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- Reset the state to the default values (initial values in the
          -- private part)
          
-         
          entry     Register_Reference (Success: out Boolean);
          -- Increases the active reference count for the element, if the
          -- element is active and has a valid Index.
@@ -243,10 +242,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       -- of Pool, referenced by Index. If Index is Null_Index, Reference shall
       -- return Curses.UI.Menus.Null_Menu_Reference
       
-      with function Debug_Lookup (Index: in GTE.Index_Type) return String is <>;
-      
    package Generic_Menu_Tree is
-   
       use all type GTE.Tree_Element;
       
       -----------------
