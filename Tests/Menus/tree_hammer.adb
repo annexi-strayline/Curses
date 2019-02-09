@@ -12,8 +12,6 @@ with Curses.UI.Menus.Standard_Trees;
 with Test_Pack.Recursive_Hammer;
 with Test_Pack.Bounded_Tree;
 
-with Debug; use Debug;
-
 procedure Tree_Hammer is
 
    package TERM renames Curses.Device.Environment;
@@ -31,8 +29,6 @@ procedure Tree_Hammer is
    subtype Counter is Hammer.Big_Counter;
    
    Totals, Averages: Hammer.Stat_Pack;
-   
-   Key: C_Char;
    
 begin
    
@@ -156,9 +152,6 @@ begin
              Content    => "Delete_All_Count   :");
       Label_Cursor.Position.Row := Label_Cursor.Position.Row + 3;
       
-      S.Put (Set_Cursor => Label_Cursor,
-             Content    => "Pool Available     :");
-      
       S.Show;
       
       loop
@@ -239,11 +232,6 @@ begin
          S.Clear_To_End (Data_Cursor);
          S.Put (Set_Cursor => Data_Cursor,
                 Content    => Counter'Image (Totals.Delete_All_Count));
-         Data_Cursor.Position.Row := Data_Cursor.Position.Row + 3;
-         
-         S.Clear_To_End (Data_Cursor);
-         S.Put (Set_Cursor => Data_Cursor,
-                Content    => Natural'Image (Test_Pack.Bounded_Tree.Avail));
          
          exit when S.Input_Key (Wait => False).Class /= No_Key;
          
@@ -258,67 +246,6 @@ begin
       end loop;
       
       Hammer.Shutdown;
-      
-      declare
-         Clear_String: String (1 .. Positive (S.Extents.Column))
-           := (others => ' ');
-
-         Status_Temp: Cursor
-           := (Position => (Row    => Status_Cursor.Position.Row,
-                            Column => 1),
-               Style    => Status_Cursor.Style,
-               others   => <>);
-      begin
-         S.Put (Set_Cursor => Status_Temp, Content => Clear_String);
-      end;
-      
-      S.Put (Set_Cursor => Status_Cursor,
-             Content    => "Deleting entire Tree...");
-      
-      Debug_Line ("Going in: " & Natural'Image (Test_Pack.Bounded_Tree.Avail));
-      
-      declare
-         use Curses.UI.Menus.Menu_Iterators;
-         use Curses.UI.Menus.Standard_Trees;
-         use Test_Pack.Recursive_Hammer;
-         
-         
-         Iterator: Forward_Iterator'Class := Tree.Staging_Branch.Iterate;
-         First: Standard_Cursor'Class := Standard_Cursor'Class(Iterator.First);
-         Next : Standard_Cursor'Class := Standard_Cursor'Class(Iterator.Next (First));
-      begin
-         while First.Has_Element  loop
-            Tree.Delete (First);
-            Debug_Line ("*");
-            
-            exit when not Next.Has_Element;
-            
-            First := Next;
-            Next  := Standard_Cursor'Class (Iterator.Next (First));
-         end loop;
-      end;
-      
-      Debug_Line ("Going out: " & Natural'Image (Test_Pack.Bounded_Tree.Avail));
-      
-      declare
-         Clear_String: String (1 .. Positive (S.Extents.Column))
-           := (others => ' ');
-         
-         Status_Temp: Cursor
-           := (Position => (Row    => Status_Cursor.Position.Row,
-                            Column => 1),
-               Style    => Status_Cursor.Style,
-               others   => <>);
-      begin
-         S.Put (Set_Cursor => Status_Temp, Content => Clear_String);
-      end;
-      
-      S.Put (Set_Cursor => Status_Cursor,
-             Content    => "Complete - Pool avail:" & 
-               Natural'Image (Test_Pack.Bounded_Tree.Avail));
-      
-      Key := S.Input_Key;
-      
    end;
    
 end Tree_Hammer;

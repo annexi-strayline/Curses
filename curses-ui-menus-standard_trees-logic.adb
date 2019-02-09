@@ -41,9 +41,6 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Ada.Exceptions; use Ada;
-with Debug; use Debug;
-
 package body Curses.UI.Menus.Standard_Trees.Logic is
    
    --------------------------
@@ -83,6 +80,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             else
                Success := False;
             end if;
+            
          exception
             when others =>
                Success := False;
@@ -247,10 +245,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
          end if;
          
       exception
-         when e: others =>
-            Debug_Line ("Common Cursor Adjust: " &
-                          Exceptions.Exception_Information (e) &
-                          " [Ref_OK:" & Boolean'Image (Ref_OK) & "]");
+         when others =>
             if Ref_OK then
                declare begin
                   Common_Remove_Ref (Tree => Tree, Index => Index);
@@ -392,10 +387,6 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
       procedure Adjust (Cursor: in out Menu_Cursor) is
       begin
          Common_Cursor_Adjust (Tree => Cursor.Tree, Index => Cursor.Index);
-      exception
-         when e: others =>
-            Debug_Line ("Cursor adjust: " & Exceptions.Exception_Information (e));
-            raise;
       end Adjust;
       
       
@@ -406,10 +397,6 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
       procedure Finalize (Cursor: in out Menu_Cursor) is
       begin
          Common_Cursor_Finalize (Tree => Cursor.Tree, Index => Cursor.Index);
-      exception
-         when e: others =>
-            Debug_Line ("Cursor finalize: " & Exceptions.Exception_Information (e));
-            raise;
       end Finalize;
          
       
@@ -1121,7 +1108,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             -- a Program_Error will eventually come back
             
          exception
-            when e: others =>
+            when others =>
                -- This is either a Program_Error, or some other extremely
                -- unlikely issue. We can count this is a failure to
                -- deactivate. If we have managed to Deactivate _our_ Item,
@@ -1130,9 +1117,6 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                if Deactivate_OK then
                   Item.State.Activate;
                end if;
-               
-               Debug_Line ("Deactivate_Item: deactivation fault: " &
-                             Exceptions.Exception_Information (e));
                
                raise Program_Error with "Item deactivation fault";
                
@@ -1161,11 +1145,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
             -- After we Free, we can't touch Item anymore, so we will pop-off
             -- the Submenu part for our own reference now
          begin
---            Debug_Line (" Delete Item #" & Debug_Lookup (Item.State.Index) &
---                       " Parent:" & Debug_Lookup (Item.State.Parent) &
---                       " Sub:" & Debug_Lookup (Item.State.Sub) &
---                       " Next:" & Debug_Lookup (Item.State.Next) &
---                       " Prev:" & Debug_Lookup (Item.State.Prev));
+
             Tree.Controller.Extract (Item);
             
             Delete_Branch (Submenu);
@@ -1243,8 +1223,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
          end if;
          
       exception
-         when e: others =>
-            Debug_Line ("Delete exception: " & Exceptions.Exception_Information (e));
+         when others =>
             -- Conceivably this should only be Program_Error, but we did not
             -- promise to raise exclusive exceptions
             
