@@ -336,6 +336,9 @@ package body Curses is
    -- Surface Class-Wide Operations
    --
    
+   ---------
+   -- Put --
+   ---------
    procedure Put (The_Surface   : in out Surface'Class;
                   Content       : in     String;
                   Justify       : in     Justify_Mode    := Left;
@@ -372,12 +375,72 @@ package body Curses is
         Surface_Unavailable | 
         Cursor_Excursion    | 
         Curses_Library      =>
-         
          raise;
          
       when e: others =>
          raise Curses_Library with 
            "Unexpected exception: " & Exceptions.Exception_Information (e);
    end Put;
+   
+   
+   ----------------
+   -- Set_Border --
+   ----------------
+   procedure Set_Border (The_Surface: in out Surface'Class) is
+   begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Set_Border (Use_Cursor => Use_Cursor);
+      end;
+      
+   exception
+      when 
+        Surface_Unavailable | 
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with 
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Set_Border;
+   
+   ----------------------------------------
+   procedure Set_Border (The_Surface: in out Surface'Class;
+                         
+                         Left_Side,
+                         Right_Side,
+                         Top_Side,
+                         Bottom_Side,
+                           
+                         Top_Left_Corner,
+                         Top_Right_Corner,
+                         Bottom_Left_Corner,
+                         Bottom_Right_Corner: in Graphic_Character)
+   is begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Set_Border (Use_Cursor          => Use_Cursor,
+                                 Left_Side           => Left_Side,
+                                 Right_Side          => Right_Side,
+                                 Top_Side            => Top_Side,
+                                 Bottom_Side         => Bottom_Side,
+                                 Top_Left_Corner     => Top_Left_Corner,
+                                 Top_Right_Corner    => Top_Right_Corner,
+                                 Bottom_Left_Corner  => Bottom_Left_Corner,
+                                 Bottom_Right_Corner => Bottom_Right_Corner);
+      end;
+      
+   exception
+      when 
+        Surface_Unavailable | 
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with 
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Set_Border;
    
 end Curses;

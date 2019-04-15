@@ -44,8 +44,8 @@
 -- -- This package (including all children) are fully task-safe. -- --
 
 with System;
-with Ada.Finalization;        use Ada.Finalization;
-with Ada.Characters.Handling; use Ada;
+with Ada.Finalization; use Ada.Finalization;
+with Ada.Wide_Characters.Handling;
 
 with Interfaces.C;
 
@@ -80,6 +80,29 @@ package Curses is
    Curses_Library: exception;
    -- Unexpected failure in external curses library
    
+   
+   --
+   -- Contractual Subtypes
+   --
+   
+   -----------------------
+   -- Graphic_Character --
+   -----------------------
+   subtype Graphic_Character is Character
+     with Static_Predicate => Graphic_Character in
+       Character'Pos (32)  .. Character'Pos (126) |
+       Character'Pos (160) .. Character'Pos (255);
+   -- For Character parameters which must be "graphic" only. This predicate is
+   -- based on the ARM defition of Characters.Handling.Is_Graphic (A.3.2)
+   
+   
+   ----------------------------
+   -- Wide_Graphic_Character --
+   ----------------------------
+   subtype Wide_Graphic_Character is Wide_Character
+     with Dynamic_Predicate => 
+       Ada.Wide_Characters.Handling.Is_Graphic (Wide_Graphic_Character);
+   -- For optionally supported "Wide_Characters". 
    
    --
    -- Fundamental Types
@@ -339,8 +362,8 @@ package Curses is
    -- change automatically, and are only updated with appropriate Resize
    -- operations (if any) of the Surface.
    --
-   -- The below Extents_Changed property can be used to affect dynamic re-render
-   -- dispatch on resize.
+   -- The below Extents_Changed property can be used to affect dynamic re-
+   -- render dispatch on resize.
    -- -- Suppresses All Exceptions --
    
    
@@ -433,17 +456,15 @@ package Curses is
                   Justify       : in     Justify_Mode    := Left;
                   Overflow      : in     Overflow_Mode   := Truncate;
                   Advance_Cursor: in     Boolean         := False)
-      is abstract
-      with Pre'Class => 
-        (for all C of Content => Characters.Handling.Is_Graphic (C));
+     is abstract
+     with Pre'Class => (for all C of Content => C in Graphic_Character);
    
    procedure Put (The_Surface   : in out Surface'Class;
                   Content       : in     String;
                   Justify       : in     Justify_Mode    := Left;
                   Overflow      : in     Overflow_Mode   := Truncate;
                   Advance_Cursor: in     Boolean         := False)
-     with Pre => 
-       (for all C of Content => Characters.Handling.Is_Graphic (C));
+     with Pre => (for all C of Content => C in Graphic_Character);
 
    -- Puts the Content at the location of the selected cursor. If no Cursor is 
    -- provided, the selected cursor is the active cursor for the Surface.
@@ -464,45 +485,63 @@ package Curses is
    
    procedure Fill (The_Surface: in out Surface;
                    Pattern    : in     String)
-      is abstract
-     with Pre'Class => 
-       (for all C of Pattern => Characters.Handling.Is_Graphic (C));
+     is abstract
+     with Pre'Class => (for all C of Pattern => C in Graphic_Character);
    
    procedure Fill (The_Surface: in out Surface;
                    Pattern    : in     String;
                    Fill_Cursor: in     Cursor'Class)
-      is abstract
-      with Pre'Class => 
-        (for all C of Pattern => Characters.Handling.Is_Graphic (C));
+     is abstract
+     with Pre'Class => (for all C of Pattern => C in Graphic_Character);
    -- Fills the entire surface with the Pattern provided, starting at
-   -- Row 1, Column 1, and proceeding left-right, top-bottom. Styling is applied
-   -- by the Fill_Cursor. If no Fill_Cursor, the Current_Cursor of the Surface 
-   -- is used.
+   -- Row 1, Column 1, and proceeding left-right, top-bottom. Styling is
+   -- applied by the Fill_Cursor. If no Fill_Cursor, the Current_Cursor of the
+   -- Surface is used.
    --
    -- -- All Possible Exceptions --
-   -- * Assertion_Error    : Raised if Pattern contains non-graphic characters  
+   -- * Assertion_Error    : Raised if Pattern contains non-graphic characters
    --                        (Via dispatching calls to Put)
-   -- * Surface_Unavailable: Raised if Surface is not Available
+   -- * Surface_Unavailable: Raised if The_Surface is not Available
    -- * Curses_Library     : Any unexpected internal error or exception
 
    
+
+   procedure Set_Border (The_Surface: in out Surface;
+                         Use_Cursor : in Cursor'Class)
+     is abstract;
+   
+   procedure Set_Border (The_Surface: in out Surface'Class);
+   -- Sets the (inner) border of The_Surface. If Use_Cursor is not specified,
+   -- the Current_Cursor of The_Surface is used. If the specific characters for
+   -- all sides and corners are not specified, the implementation-defined
+   -- default is used.
+   --
+   -- Where possible, the implementation should attempt to apply proper line-
+   -- drawing techniques, such as via the (n)curses library, or via
+   -- Wide_String Put (if supported) using the unicode "box drawing" set.
+   --
+   --
+   -- -- All Possible Exceptions --
+   -- *  Assertion_Error   : Raised (by the Static_Preciate) if any of the
+   --                        border drawing cursors are not Graphic_Characters
+   -- * Surface_Unavailable: Raised if The_Surface is not Available
+   -- * Curses_Library     : Any unexpected internal error or exception
+   
    
    procedure Set_Background (The_Surface   : in out Surface;
-                             Fill_Character: in     Character := ' ';
+                             Fill_Character: in     Graphic_Character := ' ';
                              Fill_Cursor   : in     Cursor'Class)
-      is abstract
-      with Pre'Class => Characters.Handling.Is_Graphic (Fill_Character);
+      is abstract;
    
    procedure Set_Background (The_Surface   : in out Surface;
-                             Fill_Character: in     Character := ' ')
-      is abstract
-      with Pre'Class => Characters.Handling.Is_Graphic (Fill_Character);
+                             Fill_Character: in     Graphic_Character := ' ')
+     is abstract;
    -- Sets the background to the Fill_Character, with the style of the 
    -- Fill_Cursor.
    -- 
    -- If Fill_Cursor is not specified, The_Surface's Current Cursor is used.
    
-   -- The Set_Background subprogram group allows for special low-level calls to 
+   -- The Set_Background subprogram group allows for special low-level calls to
    -- the binding which registers the background character and color, meaning 
    -- that it may operate completely differently from a Fill operation.
    --
@@ -521,7 +560,8 @@ package Curses is
    -- more specific Clear_* operations).
    --
    -- -- All Possible Exceptions --
-   -- *  Assertion_Error   : Raised if Fill_Character is not a Graphic Character
+   -- *  Assertion_Error   : Raised (by the Static_Preciate) if Fill_Character
+   --                        is not a Graphic_Character
    -- *  Suface_Unallocated: Raised if Surface is not Available
    -- *  Curses_Library    : - Unable to set background due to an error in the
    --                          Curses library, Or;
@@ -543,10 +583,10 @@ package Curses is
                          Rows   : in     Cursor_Ordinal;
                          Columns: in     Cursor_Ordinal;
                          Clip   : in     Boolean := False)
-      is abstract;
-   -- Copies the content from the Source Surface to the Target Surface, starting
-   -- from the From Cursor position, and for the number of Rows and Columns
-   -- specified.
+     is abstract;
+   -- Copies the content from the Source Surface to the Target Surface,
+   -- starting from the From Cursor position, and for the number of Rows and
+   -- Columns specified.
    --
    -- If no From/To Cursor is specified, the Current Cursor is used form the
    -- Source and Target Surfaces respectively.
@@ -565,9 +605,9 @@ package Curses is
    --
    -- Note:
    -- Due to physical restrictions in the underlying (n)curses library,
-   -- Transcribing between Surfaces attached to different Terminals, where Color
-   -- capabilities do not match, may result in unintended stylistic rendering
-   -- on the Target Surface.
+   -- Transcribing between Surfaces attached to different Terminals, where
+   -- Color capabilities do not match, may result in unintended stylistic
+   -- rendering on the Target Surface.
    --
    -- All Possible Exceptions:
    -- * Surface_Unavailable: The From or To surface (or both) are not Available
@@ -577,8 +617,8 @@ package Curses is
    --                        even with Clip => True, if the Target surface is
    --                        not compatible with Surface, and changed size
    --                        at a certain critical point in execution. It may
-   --                        also be raised if the From or To cursors exceed the
-   --                        extents of their respective Surface.
+   --                        also be raised if the From or To cursors exceed
+   --                        the extents of their respective Surface.
    -- * Curses_Library     : Any unexpected internal error or exception
                          
    
