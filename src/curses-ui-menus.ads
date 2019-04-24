@@ -78,7 +78,7 @@ package Curses.UI.Menus is
    -- label of Item, and shall not include any borders rendered by the menu
    -- subsystem itself. This is typically acheived through a Frame.
    --
-   -- The Canva's Current_Cursor shall be set by the caller to be at the
+   -- The Canvas's Current_Cursor shall be set by the caller to be at the
    -- correct position, and with an appropriate style. The style of 
    -- Canvas.Current_Cursor can be used as a reference, but can also be ignored
    -- if more elaborate styling is needed. It is provided for convenience and

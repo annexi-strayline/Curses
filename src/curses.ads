@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -45,7 +45,9 @@
 
 with System;
 with Ada.Finalization; use Ada.Finalization;
+with Ada.Characters.Conversions;
 with Ada.Wide_Characters.Handling;
+
 
 with Interfaces.C;
 
@@ -90,8 +92,8 @@ package Curses is
    -----------------------
    subtype Graphic_Character is Character
      with Static_Predicate => Graphic_Character in
-       Character'Pos (32)  .. Character'Pos (126) |
-       Character'Pos (160) .. Character'Pos (255);
+       Character'Val (32)  .. Character'Val (126) |
+       Character'Val (160) .. Character'Val (255);
    -- For Character parameters which must be "graphic" only. This predicate is
    -- based on the ARM defition of Characters.Handling.Is_Graphic (A.3.2)
    
@@ -111,12 +113,12 @@ package Curses is
    ---------------------------
    -- Library_Error_Message --
    ---------------------------
-   subtype Library_Error_Message is String (1 .. 80);
+   subtype Library_Error_Message is String(1 .. 80);
    -- The Library_Error_Message represents a standard string component which is
    -- used to transmit specific error conditions which caused various object
    -- types to become unavailable or inactive for reasons that were caused by
-   -- library interactions, specifically, and therefore are out-of control of
-   -- the Curses package Ada code.
+   -- library interactions involved in initialization of objects where
+   -- exceptions are suppressed.
    
    procedure Set_Library_Error_Message 
       (Buffer : in out Library_Error_Message;
@@ -157,13 +159,13 @@ package Curses is
                      Blink     => Left.Blink     or Right.Blink));
       
    function "-" (Left,Right: Cursor_Style) return Cursor_Style is
-      (Cursor_Style'
-        (Bold      => Left.Bold      and (Left.Bold      xor Right.Bold     ),
-         Standout  => Left.Standout  and (Left.Standout  xor Right.Standout ),
-         Dim       => Left.Dim       and (Left.Dim       xor Right.Dim      ),
-         Underline => Left.Underline and (Left.Underline xor Right.Underline),
-         Inverted  => Left.Inverted  and (Left.Inverted  xor Right.Inverted ),
-         Blink     => Left.Blink     and (Left.Blink     xor Right.Blink    )));
+     (Cursor_Style'
+       (Bold      => Left.Bold      and (Left.Bold      xor Right.Bold     ),
+        Standout  => Left.Standout  and (Left.Standout  xor Right.Standout ),
+        Dim       => Left.Dim       and (Left.Dim       xor Right.Dim      ),
+        Underline => Left.Underline and (Left.Underline xor Right.Underline),
+        Inverted  => Left.Inverted  and (Left.Inverted  xor Right.Inverted ),
+        Blink     => Left.Blink     and (Left.Blink     xor Right.Blink    )));
    -- Performs a logical [Left and (Left xor Right)] of each Boolean style
    -- component. This effectively turns off only those styles that are on
    -- in Right, and also in Left, while leaving others that are on in Left
@@ -308,6 +310,11 @@ package Curses is
    
    -- Surface Properties --
    ------------------------
+   function  Wide_Support (The_Surface: Surface) return Boolean is abstract;
+   -- For any given Surface, Wide_Support returns true if and only if the
+   -- Surface fully supports all Wide_String and Wide_Character specific
+   -- operations.
+   
    function  Available (The_Surface: Surface) return Boolean is abstract;
    -- Indicates if the Surface has been activated, and is eligible for normal
    -- IO operations. Surfaces are made available at initialization of the type.
@@ -438,9 +445,11 @@ package Curses is
       is abstract;
    -- Clears the selected Column(s)
    
-   procedure Clear_To_End (The_Surface: in out Surface)      is abstract;
+
    procedure Clear_To_End (The_Surface: in out Surface;
                            From       : in     Cursor'Class) is abstract;
+   
+   procedure Clear_To_End (The_Surface: in out Surface'Class);
    -- Clears to the end of the line from the Current Cursor, or a user-supplied
    -- Cursor, inclusive of the position under the Cursor.
    --
@@ -465,7 +474,30 @@ package Curses is
                   Overflow      : in     Overflow_Mode   := Truncate;
                   Advance_Cursor: in     Boolean         := False)
      with Pre => (for all C of Content => C in Graphic_Character);
-
+   
+   -- Wide_String
+   procedure Wide_Put
+     (The_Surface   : in out Surface;
+      Set_Cursor    : in out Cursor'Class;
+      Content       : in     Wide_String;
+      Justify       : in     Justify_Mode          := Left;
+      Overflow      : in     Overflow_Mode         := Truncate;
+      Advance_Cursor: in     Boolean               := False;
+      Wide_Fallback : access 
+        function (Item: Wide_String) return String := null)
+     is abstract
+   with Pre'Class => (for all C of Content => C in Wide_Graphic_Character);
+   
+   procedure Wide_Put
+     (The_Surface   : in out Surface'Class;
+      Content       : in     Wide_String;
+      Justify       : in     Justify_Mode          := Left;
+      Overflow      : in     Overflow_Mode         := Truncate;
+      Advance_Cursor: in     Boolean               := False;
+      Wide_Fallback : access 
+        function (Item: Wide_String) return String := null)
+   with Pre => (for all C of Content => C in Wide_Graphic_Character);
+   
    -- Puts the Content at the location of the selected cursor. If no Cursor is 
    -- provided, the selected cursor is the active cursor for the Surface.
    --
@@ -474,25 +506,49 @@ package Curses is
    -- else at the last character to be output. Any exception results in
    -- no change to Set_Cursor under any circumstance.
    --
+   -- If the Wide_String override is invoked on a Surface type that does not
+   -- support Wide_Strings, the Wide_Fallback is invoked to convert the input
+   -- string before redispatching to the String Put override.
+   --
+   -- If Wide_Fallback is null (default), and Wide_Strings are not supported by
+   -- the Surface type, the Curses_Library exception is propegated.
+   --
    -- -- All Possible Exceptions --
    -- * Assertion_Error    : Content contained non-graphic characters
    -- * Surface_Unavailable: Raised if Surface is not Available
    -- * Cursor_Excursion   : Raised if Overflow is set to Error or Wrap_Error, 
    --                        and there was insufficient space on the surface to
    --                        accomodate the Content
-   -- * Curses_Library     : Any unexpected internal error or exception
-
+   -- * Curses_Library     : - Wide_String Put not supported, and no
+   --                          substitution fallback specified, or;
+   --                        - Any unexpected internal error or exception
    
-   procedure Fill (The_Surface: in out Surface;
-                   Pattern    : in     String)
-     is abstract
-     with Pre'Class => (for all C of Pattern => C in Graphic_Character);
    
    procedure Fill (The_Surface: in out Surface;
                    Pattern    : in     String;
                    Fill_Cursor: in     Cursor'Class)
      is abstract
      with Pre'Class => (for all C of Pattern => C in Graphic_Character);
+   
+   procedure Fill (The_Surface: in out Surface'Class;
+                   Pattern    : in     String)
+     with Pre => (for all C of Pattern => C in Graphic_Character);
+   
+   
+   -- Wide_String support
+   procedure Wide_Fill (The_Surface  : in out Surface;
+                        Pattern      : in     Wide_String;
+                        Fill_Cursor  : in     Cursor'Class;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null)
+     is abstract
+     with Pre'Class => (for all C of Pattern => C in Wide_Graphic_Character);
+   
+   procedure Wide_Fill (The_Surface  : in out Surface'Class;
+                        Pattern      : in     Wide_String;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null)
+     with Pre => (for all C of Pattern => C in Wide_Graphic_Character);
    -- Fills the entire surface with the Pattern provided, starting at
    -- Row 1, Column 1, and proceeding left-right, top-bottom. Styling is
    -- applied by the Fill_Cursor. If no Fill_Cursor, the Current_Cursor of the
@@ -502,45 +558,37 @@ package Curses is
    -- * Assertion_Error    : Raised if Pattern contains non-graphic characters
    --                        (Via dispatching calls to Put)
    -- * Surface_Unavailable: Raised if The_Surface is not Available
-   -- * Curses_Library     : Any unexpected internal error or exception
+   -- * Curses_Library     : - Wide_String Fill not supported, and no
+   --                          substitution fallback specified, or;
+   --                        - Any unexpected internal error or exception
 
-   
-
-   procedure Set_Border (The_Surface: in out Surface;
-                         Use_Cursor : in Cursor'Class)
-     is abstract;
-   
-   procedure Set_Border (The_Surface: in out Surface'Class);
-   -- Sets the (inner) border of The_Surface. If Use_Cursor is not specified,
-   -- the Current_Cursor of The_Surface is used. If the specific characters for
-   -- all sides and corners are not specified, the implementation-defined
-   -- default is used.
-   --
-   -- Where possible, the implementation should attempt to apply proper line-
-   -- drawing techniques, such as via the (n)curses library, or via
-   -- Wide_String Put (if supported) using the unicode "box drawing" set.
-   --
-   --
-   -- -- All Possible Exceptions --
-   -- *  Assertion_Error   : Raised (by the Static_Preciate) if any of the
-   --                        border drawing cursors are not Graphic_Characters
-   -- * Surface_Unavailable: Raised if The_Surface is not Available
-   -- * Curses_Library     : Any unexpected internal error or exception
-   
    
    procedure Set_Background (The_Surface   : in out Surface;
                              Fill_Character: in     Graphic_Character := ' ';
                              Fill_Cursor   : in     Cursor'Class)
       is abstract;
    
-   procedure Set_Background (The_Surface   : in out Surface;
-                             Fill_Character: in     Graphic_Character := ' ')
+   procedure Set_Background (The_Surface   : in out Surface'Class;
+                             Fill_Character: in     Graphic_Character := ' ');
+   
+   procedure Wide_Set_Background
+     (The_Surface   : in out Surface;
+      Fill_Character: in     Wide_Graphic_Character := ' ';
+      Fill_Cursor   : in     Cursor'Class;
+      Wide_Fallback : access function (Item: Wide_Character) 
+                                      return Character := null)
      is abstract;
+   
+   procedure Wide_Set_Background 
+     (The_Surface   : in out Surface'Class;
+      Fill_Character: in     Wide_Graphic_Character := ' ';
+      Wide_Fallback : access function (Item: Wide_Character) 
+                                      return Character := null);
    -- Sets the background to the Fill_Character, with the style of the 
    -- Fill_Cursor.
    -- 
    -- If Fill_Cursor is not specified, The_Surface's Current Cursor is used.
-   
+   --
    -- The Set_Background subprogram group allows for special low-level calls to
    -- the binding which registers the background character and color, meaning 
    -- that it may operate completely differently from a Fill operation.
@@ -560,14 +608,107 @@ package Curses is
    -- more specific Clear_* operations).
    --
    -- -- All Possible Exceptions --
-   -- *  Assertion_Error   : Raised (by the Static_Preciate) if Fill_Character
-   --                        is not a Graphic_Character
-   -- *  Suface_Unallocated: Raised if Surface is not Available
-   -- *  Curses_Library    : - Unable to set background due to an error in the
-   --                          Curses library, Or;
-   --                      : - The implementation is not available for the
-   --                          Surface.
-     
+   -- *  Assertion_Error    : Raised (by the Static_Preciate) if Fill_Character
+   --                         is not a Graphic_Character
+   -- *  Surface_Unavailable: Raised if Surface is not Available
+   -- *  Curses_Library     : - Wide_Graphic_Character Set_Background not
+   --                           supported, and no substitution fallback
+   --                           specified; or,
+   --                         - Unable to set background due to an error in the
+   --                           Curses library; or,
+   --                         - The implementation is not available for the
+   --                           Surface.
+   
+   
+   procedure Set_Border (The_Surface: in out Surface;
+                         Use_Cursor : in     Cursor'Class)
+     is abstract;
+   
+   
+   procedure Set_Border (The_Surface: in out Surface'Class);
+   
+   
+   procedure Set_Border (The_Surface: in out Surface;
+                         Use_Cursor : in     Cursor'Class;
+                         
+                         Left_Side,
+                         Right_Side,
+                         Top_Side,
+                         Bottom_Side,
+                           
+                         Top_Left_Corner,
+                         Top_Right_Corner,
+                         Bottom_Left_Corner,
+                         Bottom_Right_Corner: in Graphic_Character)
+     is abstract;
+   
+   procedure Set_Border (The_Surface: in out Surface'Class;
+                         
+                         Left_Side,
+                         Right_Side,
+                         Top_Side,
+                         Bottom_Side,
+                           
+                         Top_Left_Corner,
+                         Top_Right_Corner,
+                         Bottom_Left_Corner,
+                         Bottom_Right_Corner: in Graphic_Character);
+   
+   
+   -- Wide_Character extension
+   procedure Wide_Set_Border (The_Surface: in out Surface;
+                              Use_Cursor : in     Cursor'Class;
+                              
+                              Left_Side,
+                              Right_Side,
+                              Top_Side,
+                              Bottom_Side,
+                                
+                              Top_Left_Corner,
+                              Top_Right_Corner,
+                              Bottom_Left_Corner,
+                              Bottom_Right_Corner: in Wide_Graphic_Character;
+                        
+                              Wide_Fallback: access 
+                                function (Item: Wide_Character) 
+                                    return Character := null)
+     is abstract;
+
+   
+   procedure Wide_Set_Border (The_Surface: in out Surface'Class;
+                         
+                              Left_Side,
+                              Right_Side,
+                              Top_Side,
+                              Bottom_Side,
+                                
+                              Top_Left_Corner,
+                              Top_Right_Corner,
+                              Bottom_Left_Corner,
+                              Bottom_Right_Corner: in Wide_Graphic_Character;
+                              
+                              Wide_Fallback: access
+                                function (Item: Wide_Character) 
+                                         return Character := null);
+   
+   -- Sets the (inner) border of The_Surface. If Use_Cursor is not specified,
+   -- the Current_Cursor of The_Surface is used. If the specific characters for
+   -- all sides and corners are not specified, the implementation-defined
+   -- default is used.
+   --
+   -- Where possible, the implementation should attempt to apply proper line-
+   -- drawing techniques, such as via the (n)curses library, or via
+   -- Wide_String Put (if supported) using the unicode "box drawing" codepage
+   -- (U2500-257F).
+   --
+   -- -- All Possible Exceptions --
+   -- * Assertion_Error    : Raised (by the subtype predicate) if any of the
+   --                        border drawing cursors are not graphic
+   -- * Surface_Unavailable: Raised if The_Surface is not Available
+   -- * Curses_Library     : - Wide_Set_Border not supported,
+   --                          and no substitution fallback specified; or,
+   --                        - Any unexpected internal error or exception
+   
      
    procedure Transcribe (Source : in out Surface;
                          Target : in out Surface'Class;
@@ -609,7 +750,7 @@ package Curses is
    -- Color capabilities do not match, may result in unintended stylistic
    -- rendering on the Target Surface.
    --
-   -- All Possible Exceptions:
+   -- -- All Possible Exceptions --
    -- * Surface_Unavailable: The From or To surface (or both) are not Available
    -- * Cursor_Excursion   : One of the input Cursors is out of bounds,
    --                        or the Rows and Columns specified exceeds the 
@@ -708,6 +849,7 @@ package Curses is
    function Invalid_Handle return Surface_Handle
      with Inline;
    -- Returns an invalid handle
+   
    
 private
    use Interfaces.C;
@@ -867,12 +1009,12 @@ private
    -- Teaching Note --
    -- We fully exploit one key concept of the Ada type system:
    -- though all three of these handles are all regular address pointers, they
-   -- represent different things, and cannot be mixed. This is a great lesson in
-   -- the practical application of two types that have the exact same physical
-   -- representation, but which represent two completely different things that
-   -- are fundamentally incompatible. This is often not obvious without a
-   -- practical example such as this.
-
+   -- represent different things, and cannot be mixed. This is a great lesson
+   -- in the practical application of two types that have the exact same
+   -- physical representation, but which represent two completely different
+   -- things that are fundamentally incompatible. This is often not obvious
+   -- without a practical example such as this.
+   --
    -- Another interesting note, and common "criticism" of such a strong type
    -- system lies in the use of functions and procedures to check, create, and
    -- manage "null" handles. In fact, this again shows many strengths of Ada.
@@ -880,8 +1022,8 @@ private
    -- Surface_Handles since we 1) know that null handles of these types are 
    -- physically equivalent to null pointers (System.Null_Address), and 
    -- therefore we'd need to invoke a type conversion, which would require a
-   -- check at elaboration, which would then make this package non-
-   -- preelaborable.
+   -- check at elaboration, which would then make this package
+   -- non-preelaborable.
    --
    -- It is a better option to take advantage of Ada 2012 function expressions
    -- to inline validation tests in a way that does not require recompilation

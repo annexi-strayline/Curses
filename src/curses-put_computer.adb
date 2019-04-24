@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -53,7 +53,7 @@ package body Curses.Put_Computer is
    -- Compute_Line --
    ------------------
    function Compute_Line return Boolean is
-      Remain: String renames Content (Select_Last + 1 .. Content'Last);
+      Remain: String_Type renames Content (Select_Last + 1 .. Content'Last);
       -- Everything beyond the currently selected portion
       -- Notice that if Select_Last is Content'Last, this gives us a null
       -- range, which means Remain'Length = 0, which is brillient.

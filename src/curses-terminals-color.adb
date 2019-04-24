@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -43,6 +43,7 @@
 
 with Ada.Exceptions; use Ada;
 with Curses.Binding.Color;
+with Curses.Binding.Color.Wide;
 
 package body Curses.Terminals.Color is
    
@@ -53,14 +54,14 @@ package body Curses.Terminals.Color is
    ------------------
    -- Palette_Lock --
    ------------------
-   -- Locked by any Terminal object initialization procedure that finds the lock
-   -- unlocked
+   -- Locked by any Terminal object initialization procedure that finds the
+   -- lock unlocked
    --
    -- This could be an Atomic variable, but we want to ensure portability.
    -- Atomic is defined in Annex C of the RM, and so is optional for an 
    -- implementation. However, the Palette_Lock is only checked when Terminals
-   -- are elaborated, or when Predefine is invoked for a Swatch or Style. All of
-   -- these conditions are (or should be) rare. There is not much of a
+   -- are elaborated, or when Predefine is invoked for a Swatch or Style. All
+   -- of these conditions are (or should be) rare. There is not much of a
    -- performance worry here.
    
    protected Palette_Lock is
@@ -532,11 +533,8 @@ package body Curses.Terminals.Color is
      (Handle          : in Surface_Handle;
       Blank_Character : in Character;
       Reference_Cursor: in Colored_Cursor'Class)
-   is
-      use Binding.Color;
-      
-   begin
-      Set_Colored_Background 
+   is begin
+      Binding.Color.Set_Colored_Background 
         (Handle           => Handle,
          Blank_Character  => Blank_Character,
          Reference_Cursor => Reference_Cursor,
@@ -551,6 +549,106 @@ package body Curses.Terminals.Color is
            "Unexpected exception: " & Exceptions.Exception_Information (e);
       
    end Apply_Colored_Background;
+   ----------------------------------------
    
+   procedure Wide_Apply_Colored_Background
+     (Handle          : in Surface_Handle;
+      Blank_Character : in Wide_Character;
+      Reference_Cursor: in Colored_Cursor'Class)
+   is begin
+      Binding.Color.Wide.Wide_Set_Colored_Background 
+        (Handle           => Handle,
+         Blank_Character  => Blank_Character,
+         Reference_Cursor => Reference_Cursor,
+         Color            => Reference_Cursor.Color.Index);
+      
+   exception
+      when Curses_Library => 
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+      
+   end Wide_Apply_Colored_Background;
+   
+   
+   --------------------------
+   -- Apply_Colored_Border --
+   --------------------------
+   procedure Apply_Colored_Border (Handle          : in Surface_Handle;
+                                   Reference_Cursor: in Colored_Cursor'Class)
+   is begin
+      Binding.Color.Set_Default_Colored_Border
+        (Handle           => Handle,
+         Reference_Cursor => Reference_Cursor,
+         Color            => Reference_Cursor.Color.Index);
+      
+   exception
+      when Curses_Library => 
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Apply_Colored_Border;
+   ----------------------------------------
+   
+   procedure Apply_Colored_Border (Handle: in Surface_Handle;
+                                   Reference_Cursor: in Colored_Cursor'Class;
+                                   LS, RS, TS, BS,
+                                     TL, TR, BL, BR  : in Character)
+   is begin
+      Binding.Color.Set_Colored_Border
+        (Handle           => Handle,
+         Reference_Cursor => Reference_Cursor,
+         Color            => Reference_Cursor.Color.Index,
+         LS               => LS,
+         RS               => RS,
+         TS               => TS,
+         BS               => BS,
+         TL               => TL,
+         TR               => TR,
+         BL               => BL,
+         BR               => BR);
+      
+   exception
+      when Curses_Library => 
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Apply_Colored_Border;
+   ----------------------------------------
+   
+   -- Wide
+   procedure Wide_Apply_Colored_Border
+     (Handle: in Surface_Handle;
+      Reference_Cursor: in Colored_Cursor'Class;
+      LS, RS, TS, BS,
+      TL, TR, BL, BR  : in Wide_Character)
+   is begin
+      Binding.Color.Wide.Wide_Set_Colored_Border
+        (Handle           => Handle,
+         Reference_Cursor => Reference_Cursor,
+         Color            => Reference_Cursor.Color.Index,
+         LS               => LS,
+         RS               => RS,
+         TS               => TS,
+         BS               => BS,
+         TL               => TL,
+         TR               => TR,
+         BL               => BL,
+         BR               => BR);
+      
+   exception
+      when Curses_Library => 
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Wide_Apply_Colored_Border;
    
 end Curses.Terminals.Color;

@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -422,6 +422,13 @@ package Curses.Terminals.Color is
      (Handle          : in Surface_Handle;
       Blank_Character : in Character;
       Reference_Cursor: in Colored_Cursor'Class);
+   
+   -- Wide_Character support
+   procedure Wide_Apply_Colored_Background
+     (Handle          : in Surface_Handle;
+      Blank_Character : in Wide_Character;
+      Reference_Cursor: in Colored_Cursor'Class);
+   
    -- Dispatched from the Surface package (Set_Background) when the Surface's
    -- Terminal indicates support for color, and the Reference_Cursor was a 
    -- member of Colored_Cursor'Class.
@@ -433,7 +440,34 @@ package Curses.Terminals.Color is
    -- raise an exception
    --
    -- -- All Possible Exceptions --
-   -- *  Curses_Library: Unable to apply style, or unexpected error
+   -- *  Curses_Library: Unable to apply style, wide support not configured, 
+   --                    or other unexpected error
+   
+   
+   --------------------------
+   -- Apply_Colored_Border --
+   --------------------------
+   procedure Apply_Colored_Border (Handle          : in Surface_Handle;
+                                   Reference_Cursor: in Colored_Cursor'Class);
+   -- Default border
+   
+   
+   procedure Apply_Colored_Border (Handle: in Surface_Handle;
+                                   Reference_Cursor: in Colored_Cursor'Class;
+                                   LS, RS, TS, BS,
+                                   TL, TR, BL, BR  : in Character);
+   -- User-defined border
+   
+   -- Wide support
+   procedure Wide_Apply_Colored_Border
+     (Handle: in Surface_Handle;
+      Reference_Cursor: in Colored_Cursor'Class;
+      LS, RS, TS, BS,
+      TL, TR, BL, BR  : in Wide_Character);
+   -- -- All Possible Exceptions --
+   -- *  Curses_Library: Unable to apply style, wide support not configured, 
+   --                    or other unexpected error
+
      
 private
    use Curses.Binding.Color;

@@ -5,7 +5,7 @@
 **                                                                          **
 ** ************************************************************************ **
 **                                                                          **
-**  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   **
+**  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              **
 **  All rights reserved.                                                    **
 **                                                                          **
 **  Original Contributors:                                                  **
@@ -52,6 +52,141 @@
 
 #define BOOL_FALSE 0
 #define BOOL_TRUE  1
+
+/**************/
+/** Internal **/
+/**************/
+static inline void internal_set_attrs
+(chtype * mod,
+ unsigned bold,
+ unsigned standout,
+ unsigned dim,
+ unsigned uline,
+ unsigned invert,
+ unsigned blink)
+{
+     if ( bold )
+          *mod |= A_BOLD;
+
+     if ( standout )
+          *mod |= A_STANDOUT;
+
+     if ( dim )
+          *mod |= A_DIM;
+
+     if ( uline )
+          *mod |= A_UNDERLINE;
+
+     if ( invert )
+          *mod |= A_REVERSE;
+
+     if ( blink )
+          *mod |= A_BLINK;
+}
+
+static inline void internal_set_attrs_color
+(chtype * mod,
+ unsigned bold,
+ unsigned standout,
+ unsigned dim,
+ unsigned uline,
+ unsigned invert,
+ unsigned blink,
+ 
+ short pair)
+{
+     internal_set_attrs ( mod, bold, standout, dim, uline, invert, blink );
+     *mod |= COLOR_PAIR(pair);
+}
+
+
+static inline bool internal_do_wborder
+(WINDOW * win,
+ 
+ unsigned bold,
+ unsigned standout,
+ unsigned dim,
+ unsigned uline,
+ unsigned invert,
+ unsigned blink,
+
+ chtype * ls,
+ chtype * rs,
+ chtype * ts,
+ chtype * bs,
+ chtype * tl,
+ chtype * tr,
+ chtype * bl,
+ chtype * br)
+{
+     int retval;
+     
+     internal_set_attrs ( ls, bold, standout, dim, uline, invert, blink );
+     internal_set_attrs ( rs, bold, standout, dim, uline, invert, blink );
+     internal_set_attrs ( ts, bold, standout, dim, uline, invert, blink );
+     internal_set_attrs ( bs, bold, standout, dim, uline, invert, blink );
+     internal_set_attrs ( tl, bold, standout, dim, uline, invert, blink );
+     internal_set_attrs ( tr, bold, standout, dim, uline, invert, blink );
+     internal_set_attrs ( bl, bold, standout, dim, uline, invert, blink );
+     internal_set_attrs ( br, bold, standout, dim, uline, invert, blink );
+
+     retval = wborder ( win, *ls, *rs, *ts, *bs, *tl, *tr, *bl, *br );
+
+     if ( retval == OK )
+          return BOOL_TRUE;
+     else
+          return BOOL_FALSE;
+}
+
+
+static inline bool internal_do_wborder_color
+(WINDOW * win,
+ 
+ unsigned bold,
+ unsigned standout,
+ unsigned dim,
+ unsigned uline,
+ unsigned invert,
+ unsigned blink,
+
+ short pair,
+
+ chtype * ls,
+ chtype * rs,
+ chtype * ts,
+ chtype * bs,
+ chtype * tl,
+ chtype * tr,
+ chtype * bl,
+ chtype * br)
+{
+     int retval;
+     
+     internal_set_attrs_color
+          ( ls, bold, standout, dim, uline, invert, blink, pair );
+     internal_set_attrs_color
+          ( rs, bold, standout, dim, uline, invert, blink, pair );
+     internal_set_attrs_color
+          ( ts, bold, standout, dim, uline, invert, blink, pair );
+     internal_set_attrs_color
+          ( bs, bold, standout, dim, uline, invert, blink, pair );
+     internal_set_attrs_color
+          ( tl, bold, standout, dim, uline, invert, blink, pair );
+     internal_set_attrs_color
+          ( tr, bold, standout, dim, uline, invert, blink, pair );
+     internal_set_attrs_color
+          ( bl, bold, standout, dim, uline, invert, blink, pair );
+     internal_set_attrs_color
+          ( br, bold, standout, dim, uline, invert, blink, pair );
+
+     retval = wborder ( win, *ls, *rs, *ts, *bs, *tl, *tr, *bl, *br );
+
+     if ( retval == OK )
+          return BOOL_TRUE;
+     else
+          return BOOL_FALSE;
+}
+
 
 /******************/
 /* Curses.Binding */
@@ -406,9 +541,7 @@ unsigned char __binding_curses_can_change_color ( void )
      retval = can_change_color ( );
 
      if (retval == TRUE)
-     {
           return BOOL_TRUE;
-     }
      else
           return BOOL_FALSE;
 }
@@ -428,7 +561,6 @@ unsigned char __binding_curses_use_default_colors ( void )
 
      if ( retval == ERR )
           return BOOL_FALSE;
-
      else
           return BOOL_TRUE;
      
@@ -529,7 +661,7 @@ bool __binding_curses_wcolor_set ( WINDOW * win, short pair )
 
 
 /* function CURSES_meta_wbkgd_color (win   : in Surface_Handle;          */
-/*                                   blank : in int;                     */
+/*                                   blank : in char;                    */
 /*                                   bold, standout, dim, uline, invert, */
 /*                                   blink : in unsigned;                */
 /*                                   pair  : in short)                   */
@@ -541,31 +673,16 @@ bool __binding_curses_wcolor_set ( WINDOW * win, short pair )
 
 bool __binding_curses_meta_wbkgd_color
 (
-     WINDOW * win, int blank, unsigned bold, unsigned standout, unsigned dim,
+     WINDOW * win, char blank, unsigned bold, unsigned standout, unsigned dim,
      unsigned uline, unsigned invert, unsigned blink, short pair
 )
 {
      int    retval;
 
-     chtype set_char = (chtype)blank | COLOR_PAIR(pair);
+     chtype set_char = (chtype)blank;
 
-     if ( bold )
-          set_char |= A_BOLD;
-
-     if ( standout )
-          set_char |= A_STANDOUT;
-
-     if ( dim )
-          set_char |= A_DIM;
-
-     if ( uline )
-          set_char |= A_UNDERLINE;
-
-     if ( invert )
-          set_char |= A_REVERSE;
-
-     if ( blink )
-          set_char |= A_BLINK;
+     internal_set_attrs_color
+     ( &set_char, bold, standout, dim, uline, invert, blink, pair );
 
      retval = wbkgd ( win, set_char );
 
@@ -825,7 +942,7 @@ void __binding_curses_wclrtoeol ( WINDOW * win )
 
 
 /* function CURSES_meta_wbkgd (win   : in Surface_Handle;          */
-/*                             blank : in int;                     */
+/*                             blank : in char;                    */
 /*                             bold, standout, dim, uline, invert, */
 /*                             blink : in unsigned;                */
 /*                            return bool                          */
@@ -836,7 +953,7 @@ void __binding_curses_wclrtoeol ( WINDOW * win )
 
 bool __binding_curses_meta_wbkgd
 (
-     WINDOW * win, int blank, unsigned bold, unsigned standout, unsigned dim,
+     WINDOW * win, char blank, unsigned bold, unsigned standout, unsigned dim,
      unsigned uline, unsigned invert, unsigned blink
 )
 {
@@ -844,23 +961,8 @@ bool __binding_curses_meta_wbkgd
 
      chtype set_char = (chtype)blank;
 
-     if ( bold )
-          set_char |= A_BOLD;
-
-     if ( standout )
-          set_char |= A_STANDOUT;
-
-     if ( dim )
-          set_char |= A_DIM;
-
-     if ( uline )
-          set_char |= A_UNDERLINE;
-
-     if ( invert )
-          set_char |= A_REVERSE;
-
-     if ( blink )
-          set_char |= A_BLINK;
+     internal_set_attrs
+          ( &set_char, bold, standout, dim, uline, invert, blink );
 
      retval = wbkgd ( win, set_char );
 
@@ -870,6 +972,160 @@ bool __binding_curses_meta_wbkgd
           return BOOL_TRUE;
      
 }
+
+
+/* function CURSES_meta_default_wborder (win: in Surface_Handle;             */
+/*                                       bold, standout, dim, uline, invert, */
+/*                                       blink: in unsigned)                 */
+/*                                      return bool                          */
+/*   with                                                                    */
+/*   Import        => True,                                                  */
+/*   Convention    => C,                                                     */
+/*   External_Name => "__binding_curses_meta_default_wborder";               */
+
+bool __binding_curses_meta_default_wborder
+(
+     WINDOW * win,
+
+     unsigned bold, unsigned standout, unsigned dim, unsigned uline,
+     unsigned invert, unsigned blink
+)
+{
+     chtype ls = ACS_VLINE;
+     chtype rs = ACS_VLINE;
+     chtype ts = ACS_HLINE;
+     chtype bs = ACS_HLINE;
+     chtype tl = ACS_ULCORNER;
+     chtype tr = ACS_URCORNER;
+     chtype bl = ACS_LLCORNER;
+     chtype br = ACS_LRCORNER;
+
+     return ( internal_do_wborder ( win,
+                                    bold, standout, dim, uline, invert, blink,
+                                    &ls, &rs, &ts, &bs, &tl, &tr, &bl, &br ) );
+}
+
+
+/* function CURSES_meta_default_wborder_color                        */
+/*   (win  : in Surface_Handle;                                      */
+/*    bold, standout, dim, uline, invert,                            */
+/*    blink: in unsigned;                                            */
+/*    pair : in short)                                               */
+/*   return bool                                                     */
+/* with                                                              */
+/*   Import        => True,                                          */
+/*   Convention    => C,                                             */
+/*   External_Name => "__binding_curses_meta_default_wborder_color"; */
+
+bool __binding_curses_meta_default_wborder_color
+(
+     WINDOW * win,
+
+     unsigned bold, unsigned standout, unsigned dim, unsigned uline,
+     unsigned invert, unsigned blink,
+
+     short pair
+)
+{
+     chtype ls = ACS_VLINE;
+     chtype rs = ACS_VLINE;
+     chtype ts = ACS_HLINE;
+     chtype bs = ACS_HLINE;
+     chtype tl = ACS_ULCORNER;
+     chtype tr = ACS_URCORNER;
+     chtype bl = ACS_LLCORNER;
+     chtype br = ACS_LRCORNER;
+
+     return ( internal_do_wborder_color
+              ( win,
+                bold, standout, dim, uline, invert, blink,
+                pair,
+                &ls, &rs, &ts, &bs, &tl, &tr, &bl, &br ) );
+}
+
+
+/* function CURSES_meta_wborder (win: in Surface_Handle;                  */
+/*                               bold, standout, dim, uline, invert,      */
+/*                               blink: in unsigned;                      */
+/*                               ls, rs, ts, bs, tl, tr, bl, br: in char) */
+/*                              return bool                               */
+/*   with                                                                 */
+/*   Import        => True,                                               */
+/*   Convention    => C,                                                  */
+/*   External_Name => "__binding_curses_meta_wborder";                    */
+
+bool __binding_curses_meta_wborder
+(
+     WINDOW * win,
+     
+     unsigned bold, unsigned standout, unsigned dim, unsigned uline,
+     unsigned invert, unsigned blink,
+
+     char ls, char rs, char ts, char bs, char tl, char tr, char bl, char br
+)
+{
+     chtype _ls = (chtype)ls;
+     chtype _rs = (chtype)rs;
+     chtype _ts = (chtype)ts;
+     chtype _bs = (chtype)bs;
+     chtype _tl = (chtype)tl;
+     chtype _tr = (chtype)tr;
+     chtype _bl = (chtype)bl;
+     chtype _br = (chtype)br;
+
+     return
+     (
+          internal_do_wborder
+          ( win,
+            bold, standout, dim, uline, invert, blink,
+            &_ls, &_rs, &_ts, &_bs, &_tl, &_tr, &_bl, &_br )
+     );
+}
+
+
+/* function CURSES_meta_wborder_color (win  : in Surface_Handle;           */
+/*                                     bold, standout, dim, uline, invert, */
+/*                                     blink: in unsigned;                 */
+/*                                     pair : in short;                    */
+/*                                     ls, rs, ts, bs, tl, tr, bl,         */
+/*                                     br   : in char)                     */
+/*                                    return bool                          */
+/*   with                                                                  */
+/*   Import        => True,                                                */
+/*   Convention    => C,                                                   */
+/*   External_Name => "__binding_curses_meta_wborder_color";               */
+
+bool __binding_curses_meta_wborder_color
+(
+     WINDOW * win,
+     
+     unsigned bold, unsigned standout, unsigned dim, unsigned uline,
+     unsigned invert, unsigned blink,
+
+     short pair,
+
+     char ls, char rs, char ts, char bs, char tl, char tr, char bl, char br
+)
+{
+     chtype _ls = (chtype)ls;
+     chtype _rs = (chtype)rs;
+     chtype _ts = (chtype)ts;
+     chtype _bs = (chtype)bs;
+     chtype _tl = (chtype)tl;
+     chtype _tr = (chtype)tr;
+     chtype _bl = (chtype)bl;
+     chtype _br = (chtype)br;
+
+     return
+     (
+          internal_do_wborder_color
+          ( win,
+            bold, standout, dim, uline, invert, blink,
+            pair,
+            &_ls, &_rs, &_ts, &_bs, &_tl, &_tr, &_bl, &_br )
+     );
+}
+     
 
 
 /* function CURSES_copywin (srcwin : in Surface_Handle; */

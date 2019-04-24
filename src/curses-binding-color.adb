@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -143,17 +143,41 @@ package body Curses.Binding.Color is
      External_Name => "__binding_curses_wcolor_set";
    
    
-   function CURSES_meta_wbkgd_color (win   : in Surface_Handle;
-                                     blank : in int;
+   function CURSES_meta_wbkgd_color (win  : in Surface_Handle;
+                                     blank: in char;
                                      bold, standout, dim, uline, invert,
-                                     blink : in unsigned;
-                                     pair  : in short)
+                                     blink: in unsigned;
+                                     pair : in short)
                                     return bool
      with
      Import        => True,
      Convention    => C,
      External_Name => "__binding_curses_meta_wbkgd_color";
    -- Returns Bool_False on failure
+   
+   function CURSES_meta_default_wborder_color
+     (win  : in Surface_Handle;
+      bold, standout, dim, uline, invert,
+      blink: in unsigned;
+      pair : in short)
+     return bool
+   with
+     Import        => True,
+     Convention    => C,
+     External_Name => "__binding_curses_meta_default_wborder_color";
+   -- calls wborder with the "default" arguments. 
+   
+   function CURSES_meta_wborder_color (win  : in Surface_Handle;
+                                       bold, standout, dim, uline, invert,
+                                       blink: in unsigned;
+                                       pair : in short;
+                                       ls, rs, ts, bs, tl, tr, bl, 
+                                       br   : in char)
+                                      return bool
+     with
+     Import        => True,
+     Convention    => C,
+     External_Name => "__binding_curses_meta_wborder_color";
    
    
    -----------------------
@@ -512,10 +536,11 @@ package body Curses.Binding.Color is
    ----------------------------
    -- Set_Colored_Background --
    ----------------------------
-   procedure Set_Colored_Background (Handle          : in Surface_Handle;
-                                     Blank_Character : in Character;
-                                     Reference_Cursor: in Cursor'Class;
-                                     Color           : in CURSES_Color_Pair)
+   procedure Generic_Set_Colored_Background
+     (Handle          : in Surface_Handle;
+      Blank_Character : in Ada_Char_Type;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair)
    is
       Set_Bold, Set_Standout, Set_Dim, 
       Set_Uline, Set_Invert, Set_Blink: unsigned := 0;
@@ -556,9 +581,9 @@ package body Curses.Binding.Color is
       Lock_Or_Panic;
       Lock_OK := True;
       
-      Result := CURSES_meta_wbkgd_color
+      Result := CURSES_generic_meta_set_background_color
         (win      => Handle,
-         blank    => int(Character'Pos(Blank_Character)),
+         blank    => To_C (Blank_Character),
          bold     => Set_Bold, 
          standout => Set_Standout,
          dim      => Set_Dim,
@@ -585,6 +610,227 @@ package body Curses.Binding.Color is
          end if;
          raise Curses_Library with "Unexpected exception";
       
+   end Generic_Set_Colored_Background;
+   ----------------------------------------
+   
+   
+   procedure Set_Colored_Background (Handle          : in Surface_Handle;
+                                     Blank_Character : in Character;
+                                     Reference_Cursor: in Cursor'Class;
+                                     Color           : in CURSES_Color_Pair)
+   is 
+      procedure Set_Colored_Background is new Generic_Set_Colored_Background
+        (Ada_Char_Type => Character,
+         C_Char_Type   => char,
+         To_C          => Interfaces.C.To_C,
+         CURSES_generic_meta_set_background_color
+           => CURSES_meta_wbkgd_color)
+        with Inline;
+   begin
+      Set_Colored_Background (Handle           => Handle,
+                              Blank_Character  => Blank_Character,
+                              Reference_Cursor => Reference_Cursor,
+                              Color            => Color);
    end Set_Colored_Background;
+   
+   
+   --------------------------------
+   -- Set_Default_Colored_Border --
+   --------------------------------
+   procedure Set_Default_Colored_Border 
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair)
+   is
+      Set_Bold, Set_Standout, Set_Dim, 
+        Set_Uline, Set_Invert, Set_Blink: unsigned := 0;
+      
+      Lock_OK     : Boolean := False;
+      Result      : Bool;
+      
+   begin
+      if not Handle_Valid (Handle) then
+         raise Curses_Library with
+           "Surface handle invalid";
+      end if;
+      
+      
+      if Reference_Cursor.Style.Bold then
+         Set_Bold := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Standout then
+         Set_Standout := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Dim then
+         Set_Dim := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Underline then
+         Set_Uline := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Inverted then
+         Set_Invert := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Blink then
+         Set_Blink := unsigned'Last;
+      end if;
+      
+      Lock_Or_Panic;
+      Lock_OK := True;
+      
+      Result := CURSES_meta_default_wborder_color
+        (win      => Handle,
+         bold     => Set_Bold, 
+         standout => Set_Standout,
+         dim      => Set_Dim,
+         uline    => Set_Uline,
+         invert   => Set_Invert,
+         blink    => Set_Blink,
+         pair     => Color);
+      
+      Serial.Unlock;
+      Lock_OK := False;
+      
+      if Result /= Bool_True then
+         raise Curses_Library with
+           "Library call to wbkg(rn)d () (with color attributes) failed.";
+      end if;
+      
+      
+   exception
+      when Curses_Library =>
+         raise;
+         
+      when others =>
+         if Lock_OK then
+            Serial.Unlock;
+         end if;
+         raise Curses_Library with "Unexpected exception";
+         
+   end Set_Default_Colored_Border;
+   
+   
+   ------------------------
+   -- Set_Colored_Border --
+   ------------------------
+   procedure Generic_Set_Colored_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Ada_Char_Type)
+   is
+      Set_Bold, Set_Standout, Set_Dim, 
+        Set_Uline, Set_Invert, Set_Blink: unsigned := 0;
+      
+      Lock_OK     : Boolean := False;
+      Result      : Bool;
+      
+   begin
+      if not Handle_Valid (Handle) then
+         raise Curses_Library with
+           "Surface handle invalid";
+      end if;
+      
+      
+      if Reference_Cursor.Style.Bold then
+         Set_Bold := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Standout then
+         Set_Standout := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Dim then
+         Set_Dim := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Underline then
+         Set_Uline := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Inverted then
+         Set_Invert := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Blink then
+         Set_Blink := unsigned'Last;
+      end if;
+      
+      Lock_Or_Panic;
+      Lock_OK := True;
+      
+      Result := CURSES_generic_meta_wborder_color
+        (win      => Handle,
+         bold     => Set_Bold, 
+         standout => Set_Standout,
+         dim      => Set_Dim,
+         uline    => Set_Uline,
+         invert   => Set_Invert,
+         blink    => Set_Blink,
+         
+         ls => To_C (LS),
+         rs => To_C (RS),
+         ts => To_C (TS),
+         bs => To_C (BS),
+         tl => To_C (TL),
+         tr => To_C (TR),
+         bl => To_C (BL),
+         br => To_C (BR),
+         
+         pair => Color);
+      
+      Serial.Unlock;
+      Lock_OK := False;
+      
+      if Result /= Bool_True then
+         raise Curses_Library with
+           "Library call to wbkg(rn)d () (with color attributes) failed.";
+      end if;
+      
+      
+   exception
+      when Curses_Library =>
+         raise;
+         
+      when others =>
+         if Lock_OK then
+            Serial.Unlock;
+         end if;
+         raise Curses_Library with "Unexpected exception";
+         
+   end Generic_Set_Colored_Border;
+   ----------------------------------------
+   
+   procedure Set_Colored_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Character)
+   is
+      procedure Set_Colored_Border_Actual is 
+        new Generic_Set_Colored_Border 
+          (Ada_Char_Type => Character,
+           C_Char_Type   => char,
+           To_C          => Interfaces.C.To_C,
+           CURSES_generic_meta_wborder_color => CURSES_meta_wborder_color)
+        with Inline;
+      
+   begin
+      Set_Colored_Border_Actual (Handle           => Handle,
+                                 Reference_Cursor => Reference_Cursor,
+                                 Color            => Color,
+                                 LS               => LS,
+                                 RS               => RS,
+                                 TS               => TS,
+                                 BS               => BS,
+                                 TL               => TL,
+                                 TR               => TR,
+                                 BL               => BL,
+                                 BR               => BR);
+   end Set_Colored_Border;
    
 end Curses.Binding.Color;

@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -47,6 +47,7 @@ with Ada.Assertions;
 with Curses.Put_Computer;
 with Curses.Binding.Terminals;
 with Curses.Binding.Render;
+with Curses.Binding.Render.Wide;
 with Curses.Terminals.Color;
 
 
@@ -180,26 +181,26 @@ package body Curses.Terminals.Surfaces is
                         Set_Cursor : in     Cursor'Class) 
    is
       use Binding.Render;
-      use Terminals.Color;
    begin
       -- First, we go ahead and set the regular attributes, these are set
       -- regardless of the colour capabilities of the Terminal
       
-      Set_Attributes (Handle => The_Surface.Handle,
-                      Style  => Set_Cursor.Style);
+      Binding.Render.Set_Attributes (Handle => The_Surface.Handle,
+                                     Style  => Set_Cursor.Style);
       
       -- Check for a Colored Cursor.
       -- Ensure that the selected Color_Style is actually supported by
       -- TTY behind The_Surface. This also checks general color capability
       -- of the terminal
       
-      if Set_Cursor in Colored_Cursor'Class 
-        and then Supports_Color_Style 
+      if Set_Cursor in Terminals.Color.Colored_Cursor'Class 
+        and then Terminals.Color.Supports_Color_Style 
         (TTY   => The_Surface.TTY.all,
-         Style => Colored_Cursor(Set_Cursor).Color)
+         Style => Terminals.Color.Colored_Cursor (Set_Cursor).Color)
       then
-         Apply_Color_Style (Handle => The_Surface.Handle,
-                            Style  => Colored_Cursor(Set_Cursor).Color);
+         Terminals.Color.Apply_Color_Style 
+           (Handle => The_Surface.Handle,
+            Style  => Terminals.Color.Colored_Cursor (Set_Cursor).Color);
       end if;
       
       
@@ -247,6 +248,13 @@ package body Curses.Terminals.Surfaces is
    --
    -- Surface State and Properties
    -- 
+   
+   ------------------
+   -- Wide_Support --
+   ------------------
+   function Wide_Support (The_Surface: Terminal_Surface) return Boolean
+     is (Binding.Render.Wide.Wide_Support_Configured);
+   -- Defer to the Binding package for Wide_Support
    
    --------------------
    -- Current_Cursor --
@@ -473,37 +481,43 @@ package body Curses.Terminals.Surfaces is
          
    end Clear_To_End;
    
-   ----------------------------------------
-   overriding
-   procedure Clear_To_End (The_Surface: in out Terminal_Surface) is
-   begin
-      The_Surface.Clear_To_End (From => The_Surface.Cursor_State.Get);
-      
-   exception
-      when others => null;
-   end Clear_To_End;
-   
    
    ---------
    -- Put --
    ---------
-   overriding
-   procedure Put (The_Surface   : in out Terminal_Surface;
-                  Set_Cursor    : in out Cursor'Class;
-                  Content       : in     String;
-                  Justify       : in     Justify_Mode  := Left;
-                  Overflow      : in     Overflow_Mode := Truncate;
-                  Advance_Cursor: in     Boolean       := False)
+   generic
+      type Character_Type is (<>);
+      type String_Type is array (Positive range <>) of Character_Type;
+   
+      with procedure Binding_Put_String (Handle: in Surface_Handle;
+                                         Buffer: in String_Type);
+   
+   procedure Generic_Put (The_Surface   : in out Terminal_Surface'Class;
+                          Set_Cursor    : in out Cursor'Class;
+                          Content       : in     String_Type;
+                          Justify       : in     Justify_Mode;
+                          Overflow      : in     Overflow_Mode;
+                          Advance_Cursor: in     Boolean);
+   
+   
+   procedure Generic_Put (The_Surface   : in out Terminal_Surface'Class;
+                          Set_Cursor    : in out Cursor'Class;
+                          Content       : in     String_Type;
+                          Justify       : in     Justify_Mode;
+                          Overflow      : in     Overflow_Mode;
+                          Advance_Cursor: in     Boolean)
    is
-      
       Write_Head: Cursor_Position := Set_Cursor.Position;
       
       package Computer is new Put_Computer
-        (The_Surface => Surface'Class (The_Surface),
-         Write_Head  => Write_Head,
-         Justify     => Justify,
-         Overflow    => Overflow,
-         Content     => Content);
+        (Character_Type => Character_Type,
+         String_Type    => String_Type,
+      
+         The_Surface    => Surface'Class (The_Surface),
+         Write_Head     => Write_Head,
+         Justify        => Justify,
+         Overflow       => Overflow,
+         Content        => Content);
       
       
       -- Tasking_Order --
@@ -514,27 +528,27 @@ package body Curses.Terminals.Surfaces is
       type T_O is new Tasking_Order with null record;
       
       procedure Execute (Order: in out T_O) is
-         use Binding;
-         use Binding.Render;
-         
          Select_First: Natural renames Computer.Select_First;
          Select_Last : Natural renames Computer.Select_Last;
          
       begin
          -- We are simply executing each computed line. The Put_Computer has
-         -- already set the Position of the Write_Cursor, so we move there, 
-         -- and execute the actual put. The purpose of the Tasking_Order is to
-         -- ensure that the Place_Cursor (remember - that is terminal-wide),
-         -- is atomically followed by the Set_Style and Put_String.
+         -- already computed the Position of the Write_Cursor, so we move
+         -- there, and execute the actual put. The purpose of the Tasking_Order
+         -- is to ensure that the Place_Cursor (remember - that is
+         -- terminal-wide), is atomically paired with Set_Style and Put_String.
+           
+         Set_Style 
+           (The_Surface => The_Surface,
+            Set_Cursor  => Set_Cursor);
          
-         Place_Cursor (Handle   => The_Surface.Handle,
-                       Position => Write_Head);
+         Binding.Render.Place_Cursor
+           (Handle   => The_Surface.Handle,
+            Position => Write_Head);
          
-         Set_Style (The_Surface => The_Surface,
-                    Set_Cursor  => Set_Cursor);
-         
-         Put_String (Handle => The_Surface.Handle,
-                     Buffer => Content(Select_First .. Select_Last));
+         Binding_Put_String 
+           (Handle => The_Surface.Handle,
+            Buffer => Content(Select_First .. Select_Last));
          
          Set_Modified (The_Surface);
          
@@ -575,117 +589,225 @@ package body Curses.Terminals.Surfaces is
          raise Curses_Library with 
            "Unexpected exception: " & Exceptions.Exception_Information (e);
       
+   end Generic_Put;
+   
+   
+   -- Standard String
+   overriding
+   procedure Put (The_Surface   : in out Terminal_Surface;
+                  Set_Cursor    : in out Cursor'Class;
+                  Content       : in     String;
+                  Justify       : in     Justify_Mode    := Left;
+                  Overflow      : in     Overflow_Mode   := Truncate;
+                  Advance_Cursor: in     Boolean         := False)
+   is 
+      procedure Put_Actual is new Generic_Put
+        (Character_Type     => Character,
+         String_Type        => String,
+         Binding_Put_String => Binding.Render.Put_String)
+        with Inline;
+   begin
+      Put_Actual (The_Surface    => The_Surface,
+                  Set_Cursor     => Set_Cursor,
+                  Content        => Content,
+                  Justify        => Justify,
+                  Overflow       => Overflow,
+                  Advance_Cursor => Advance_Cursor);
    end Put;
    
+   
+   -- Wide_Put
+   overriding
+   procedure Wide_Put (The_Surface   : in out Terminal_Surface;
+                       Set_Cursor    : in out Cursor'Class;
+                       Content       : in     Wide_String;
+                       Justify       : in     Justify_Mode      := Left;
+                       Overflow      : in     Overflow_Mode     := Truncate;
+                       Advance_Cursor: in     Boolean           := False;
+                       Wide_Fallback : access 
+                         function (Item: Wide_String) return String := null)
+   is
+      procedure Put_Actual is new Generic_Put
+        (Character_Type     => Wide_Character,
+         String_Type        => Wide_String,
+         Binding_Put_String => Binding.Render.Wide.Put_Wide_String)
+        with Inline;
+   begin
+      if not Binding.Render.Wide.Wide_Support_Configured then
+         if Wide_Fallback = null then
+            raise Curses_Library with
+              "Binding not configured with Wide_String support, " &
+              "and no Wide_Fallback provided";
+         else
+            The_Surface.Put (Set_Cursor     => Set_Cursor,
+                             Content        => Wide_Fallback (Content),
+                             Justify        => Justify,
+                             Overflow       => Overflow,
+                             Advance_Cursor => Advance_Cursor);
+         end if;
+      else
+         
+         Put_Actual (The_Surface    => The_Surface,
+                     Set_Cursor     => Set_Cursor,
+                     Content        => Content,
+                     Justify        => Justify,
+                     Overflow       => Overflow,
+                     Advance_Cursor => Advance_Cursor);
+         
+      end if;
+   end Wide_Put;
    
    ----------
    -- Fill --
    ----------
-   overriding
-   procedure Fill (The_Surface: in out Terminal_Surface;
-                   Pattern    : in     String;
-                   Fill_Cursor: in     Cursor'Class)
-   is
-      Extents: Cursor_Position := The_Surface.Extents;
-      Put_At : Cursor'Class    := Fill_Cursor;
+   generic
+      type Character_Type is (<>);
+      type String_Type is array (Positive range <>) of Character_Type;
       
-      Buffer_Size: Positive;
+      with procedure Put_Pattern (The_Surface: in out Terminal_Surface'Class;
+                                  Use_Cursor : in out Cursor'Class;
+                                  Pattern    : in     String_Type);
+      -- Should dispatch to Put with the following configuration:
+      -- Justify        => Left,
+      -- Overflow       => Wrap_Truncate
+      -- Advance_Cursor => True
+   
+   procedure Generic_Fill (The_Surface: in out Terminal_Surface;
+                           Pattern    : in     String_Type;
+                           Fill_Cursor: in     Cursor'Class);
+   
+   
+   procedure Generic_Fill (The_Surface: in out Terminal_Surface;
+                           Pattern    : in     String_Type;
+                           Fill_Cursor: in     Cursor'Class)
+   is
+      pragma Assertion_Policy (Pre'Class => Ignore);
+      -- For the graphic character requirements to The_Surface.Put, which
+      -- are already covered by the Pre'Class precondition for Fill
+      
+      Use_Cursor: Cursor'Class := Fill_Cursor;
+      
    begin
       -- Check for silliness, don't waste any time with it
       if Pattern'Length < 1 then
          return;
       end if;
       
-      -- Build the entire surface pattern in-place, according to the
-      -- current size of the Surface, and dispatch to Put
+      Use_Cursor.Position := (1, 1);
       
-      Put_At.Position.Row    := 1;
-      Put_At.Position.Column := 1;
-      
-      Buffer_Size := Positive (Extents.Column * Extents.Row);
-      -- The semantics of Surfaces ensures that this is always at least
-      -- 1. The smallest Surface is always 1 x 1, since Cursor_Ordinal
-      -- has a lower constraint of 1.
-      
-      -- If Pattern is already larger than the available space on the
-      -- surface, we can just dispatch directly to Put with the pattern
-      if Buffer_Size <= Pattern'Length then
-         The_Surface.Put (Set_Cursor => Put_At,
-                          Content    => Pattern,
-                          Justify    => Left,
-                          Overflow   => Wrap_Truncate);
-      else
-         declare
-            Fill_Buffer: String (1 .. Buffer_Size);
-            
-            Chunk_First: Positive := Fill_Buffer'First;
-            Chunk_Last : Positive := Fill_Buffer'First + Pattern'Length - 1;
-         begin
-            -- Fill_Buffer is larger than pattern, so we need to repeat it
-            -- as long as it fits
-            
-            loop
-               Fill_Buffer(Chunk_First .. Chunk_Last) := Pattern;
-               
-               Chunk_First := Chunk_Last + 1;
-               Chunk_Last  := Chunk_First + Pattern'Length - 1;
-               
-               exit when Chunk_First > Fill_Buffer'Last;
-               
-               if Chunk_Last > Fill_Buffer'Last then
-                  Chunk_Last := Fill_Buffer'Last;
-                  
-                  Fill_Buffer(Chunk_First .. Chunk_Last)
-                    := Pattern(Pattern'First .. 
-                                 Pattern'First + (Chunk_Last - Chunk_First));
-                  exit;
-               end if;
-               
-            end loop;
-            
-            -- Write it out in one go
-            The_Surface.Put (Set_Cursor => Put_At,
-                             Content    => Fill_Buffer,
-                             Justify    => Left,
-                             Overflow   => Wrap_Truncate);
-            -- This also sets the Modified Status flag via Put
-            
-         end;
-      end if;
+      loop
+         Put_Pattern (The_Surface => The_Surface,
+                      Use_Cursor  => Use_Cursor,
+                      Pattern     => Pattern);
+         
+         exit when Use_Cursor.Position >= The_Surface.Extents;
+      end loop;
       
    exception
-      when Surface_Unavailable | Curses_Library | Assertions.Assertion_Error =>
-         -- Likely from Put
+      when Surface_Unavailable | Curses_Library =>
          raise;
          
       when e: others =>
          raise Curses_Library with "Unexpected exception: " &
            Exceptions.Exception_Information (e);
          
-   end Fill;
+   end Generic_Fill;
    ----------------------------------------
+   
    
    overriding
    procedure Fill (The_Surface: in out Terminal_Surface;
-                   Pattern    : in     String)
+                   Pattern    : in     String;
+                   Fill_Cursor: in     Cursor'Class)
    is
+      procedure Put_Pattern (The_Surface: in out Terminal_Surface'Class;
+                             Use_Cursor : in out Cursor'Class;
+                             Pattern    : in     String)
+      with Inline is
+      begin
+         The_Surface.Put (Set_Cursor     => Use_Cursor,
+                          Content        => Pattern,
+                          Justify        => Left,
+                          Overflow       => Wrap_Truncate,
+                          Advance_Cursor => True);
+         
+      end Put_Pattern;
+      
+      procedure Fill_Actual is new Generic_Fill
+        (Character_Type => Character,
+         String_Type    => String,
+         Put_Pattern    => Put_Pattern)
+        with Inline;
    begin
-      The_Surface.Fill (Pattern     => Pattern, 
-                        Fill_Cursor => The_Surface.Cursor_State.Get);
+      
+      Fill_Actual (The_Surface => The_Surface,
+                   Pattern     => Pattern,
+                   Fill_Cursor => Fill_Cursor);
+      
    end Fill;
-
+   
+   
+   -- Wide_Fill
+   overriding
+   procedure Wide_Fill (The_Surface  : in out Terminal_Surface;
+                        Pattern      : in     Wide_String;
+                        Fill_Cursor  : in     Cursor'Class;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null)
+   is
+      procedure Put_Pattern (The_Surface: in out Terminal_Surface'Class;
+                             Use_Cursor : in out Cursor'Class;
+                             Pattern    : in     Wide_String)
+      with Inline is
+      begin
+         The_Surface.Wide_Put (Set_Cursor     => Use_Cursor,
+                               Content        => Pattern,
+                               Justify        => Left,
+                               Overflow       => Wrap_Truncate,
+                               Advance_Cursor => True,
+                               Wide_Fallback  => Wide_Fallback);
+         
+      end Put_Pattern;
+      
+      procedure Fill_Actual is new Generic_Fill
+        (Character_Type => Wide_Character,
+         String_Type    => Wide_String,
+         Put_Pattern    => Put_Pattern)
+        with Inline;
+   begin
+      Fill_Actual (The_Surface => The_Surface,
+                   Pattern     => Pattern,
+                   Fill_Cursor => Fill_Cursor);
+   end Wide_Fill;
+   
    
    --------------------
    -- Set_Background --
    --------------------
-   overriding
-   procedure Set_Background (The_Surface   : in out Terminal_Surface;
-                             Fill_Character: in     Character := ' ';
-                             Fill_Cursor   : in     Cursor'Class)
-   is
-      use Curses.Terminals.Color;
-      
-   begin
+   generic
+      type Character_Type is (<>);
+   
+      with procedure Apply_Colored_Background 
+        (Handle          : in Surface_Handle;
+         Blank_Character : in Character_Type;
+         Reference_Cursor: in Terminals.Color.Colored_Cursor'Class);
+   
+      with procedure Apply_Monochrome_Background
+        (Handle          : in Surface_Handle;
+         Blank_Character : in Character_Type;
+         Reference_Cursor: in Cursor'Class);
+   
+   procedure Generic_Set_Background 
+     (The_Surface   : in out Terminal_Surface'Class;
+      Fill_Character: in     Character_Type;
+      Fill_Cursor   : in     Cursor'Class);
+   
+   
+   procedure Generic_Set_Background
+     (The_Surface   : in out Terminal_Surface'Class;
+      Fill_Character: in     Character_Type;
+      Fill_Cursor   : in     Cursor'Class)
+   is begin
       if not The_Surface.Available then
          raise Surface_Unavailable;
       end if;
@@ -694,21 +816,21 @@ package body Curses.Terminals.Surfaces is
       -- Colored_Cursor, and if so, whether or not the TTY behind the Surface
       -- can actually handle that particular Color_Style.
       
-      if Fill_Cursor in Colored_Cursor'Class
-        and then Supports_Color_Style
+      if Fill_Cursor in Terminals.Color.Colored_Cursor'Class
+        and then Terminals.Color.Supports_Color_Style
         (TTY   => The_Surface.TTY.all,
-         Style => Colored_Cursor(Fill_Cursor).Color)
+         Style => Terminals.Color.Colored_Cursor (Fill_Cursor).Color)
       then
-         Terminals.Color.Apply_Colored_Background
+         Apply_Colored_Background
            (Handle           => The_Surface.Handle,
             Blank_Character  => Fill_Character,
-            Reference_Cursor => Colored_Cursor (Fill_Cursor));
+            Reference_Cursor => Terminals.Color.Colored_Cursor (Fill_Cursor));
          -- Invokes the appropriate binding after processing the color
          -- information
          
       else
          -- Monochrome!
-         Binding.Render.Set_Monochrome_Background
+         Apply_Monochrome_Background
            (Handle           => The_Surface.Handle,
             Blank_Character  => Fill_Character,
             Reference_Cursor => Fill_Cursor);
@@ -726,18 +848,298 @@ package body Curses.Terminals.Surfaces is
            "Set_Background: Unexpected exception: " &
            Exceptions.Exception_Information (e);
       
-   end Set_Background;
+   end Generic_Set_Background;
    ----------------------------------------
+   
    
    overriding
    procedure Set_Background (The_Surface   : in out Terminal_Surface;
-                             Fill_Character: in     Character := ' ')
+                             Fill_Character: in     Graphic_Character := ' ';
+                             Fill_Cursor   : in     Cursor'Class)
+   is
+      procedure Set_Background_Actual is new Generic_Set_Background
+        (Character_Type 
+           => Character,
+         Apply_Colored_Background 
+           => Terminals.Color.Apply_Colored_Background,
+         Apply_Monochrome_Background 
+           => Binding.Render.Set_Monochrome_Background);
+   begin
+      Set_Background_Actual (The_Surface    => The_Surface,
+                             Fill_Character => Fill_Character,
+                             Fill_Cursor    => Fill_Cursor);
+   end Set_Background;
+   
+   
+   -- Wide_Set_Background
+   overriding
+   procedure Wide_Set_Background
+     (The_Surface   : in out Terminal_Surface;
+      Fill_Character: in     Wide_Graphic_Character := ' ';
+      Fill_Cursor   : in     Cursor'Class;
+      Wide_Fallback : access function (Item: Wide_Character) 
+                                      return Character := null)
+   is
+      procedure Set_Background_Actual is new Generic_Set_Background
+        (Character_Type 
+           => Wide_Character,
+         Apply_Colored_Background 
+           => Terminals.Color.Wide_Apply_Colored_Background,
+         Apply_Monochrome_Background 
+           => Binding.Render.Wide.Wide_Set_Monochrome_Background);
+   begin
+      if not Binding.Render.Wide.Wide_Support_Configured then
+         if Wide_Fallback = null then
+            raise Curses_Library with
+              "Binding not configured with Wide_String support, " &
+              "and no Wide_Fallback provided";
+         else
+            The_Surface.Set_Background
+              (Fill_Character => Wide_Fallback (Fill_Character),
+               Fill_Cursor    => Fill_Cursor);
+         end if;
+      else
+         
+         Set_Background_Actual (The_Surface    => The_Surface,
+                                Fill_Character => Fill_Character,
+                                Fill_Cursor    => Fill_Cursor);
+      end if;
+   end Wide_Set_Background;
+   
+   
+   ----------------
+   -- Set_Border --
+   ----------------
+   overriding
+   procedure Set_Border (The_Surface: in out Terminal_Surface;
+                         Use_Cursor : in     Cursor'Class)
    is
    begin
-      The_Surface.Set_Background 
-        (Fill_Character => Fill_Character,
-         Fill_Cursor    => The_Surface.Cursor_State.Get);
-   end Set_Background;
+      if not The_Surface.Available then
+         raise Surface_Unavailable;
+      end if;
+      
+      if Use_Cursor in Terminals.Color.Colored_Cursor'Class
+        and then Terminals.Color.Supports_Color_Style
+          (TTY   => The_Surface.TTY.all,
+           Style => Terminals.Color.Colored_Cursor (Use_Cursor).Color)
+      then
+         Terminals.Color.Apply_Colored_Border
+           (Handle           => The_Surface.Handle,
+            Reference_Cursor => Terminals.Color.Colored_Cursor (Use_Cursor));
+      else
+         Binding.Render.Set_Default_Monochrome_Border
+           (Handle           => The_Surface.Handle,
+            Reference_Cursor => Use_Cursor);
+      end if;
+      
+      Set_Modified (The_Surface);
+      
+   exception
+      when Surface_Unavailable | Curses_Library =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Set_Background: Unexpected exception: " &
+           Exceptions.Exception_Information (e);
+      
+   end Set_Border;
+   ----------------------------------------
+   
+   
+   generic
+      type Character_Type is (<>);
+      
+      with procedure Apply_Colored_Border
+        (Handle          : in Surface_Handle;
+         Reference_Cursor: in Terminals.Color.Colored_Cursor'Class;
+         LS, RS, TS, BS,
+         TL, TR, BL, BR  : in Character_Type);
+      
+      with procedure Apply_Monochrome_Border
+        (Handle           : in Surface_Handle;
+         Reference_Cursor: in Cursor'Class;
+         LS, RS, TS, BS, 
+         TL, TR, BL, BR  : in Character_Type);
+   
+   procedure Generic_Set_Border
+     (The_Surface: in out Terminal_Surface;
+      Use_Cursor : in     Cursor'Class;
+      
+      Left_Side,
+      Right_Side,
+      Top_Side,
+      Bottom_Side,
+        
+      Top_Left_Corner,
+      Top_Right_Corner,
+      Bottom_Left_Corner,
+      Bottom_Right_Corner: in Character_Type);
+   
+   procedure Generic_Set_Border
+     (The_Surface: in out Terminal_Surface;
+      Use_Cursor : in     Cursor'Class;
+      
+      Left_Side,
+        Right_Side,
+        Top_Side,
+        Bottom_Side,
+        
+        Top_Left_Corner,
+        Top_Right_Corner,
+        Bottom_Left_Corner,
+        Bottom_Right_Corner: in Character_Type)
+   is begin
+      if not The_Surface.Available then
+         raise Surface_Unavailable;
+      end if;
+      
+      if Use_Cursor in Terminals.Color.Colored_Cursor'Class
+        and then Terminals.Color.Supports_Color_Style
+        (TTY   => The_Surface.TTY.all,
+         Style => Terminals.Color.Colored_Cursor (Use_Cursor).Color)
+      then
+         Apply_Colored_Border
+           (Handle           => The_Surface.Handle,
+            Reference_Cursor => Terminals.Color.Colored_Cursor (Use_Cursor),
+            LS               => Left_Side,
+            RS               => Right_Side,
+            TS               => Top_Side,
+            BS               => Bottom_Side,
+            TL               => Top_Left_Corner,
+            TR               => Top_Right_Corner,
+            BL               => Bottom_Left_Corner,
+            BR               => Bottom_Right_Corner);
+         -- Invokes the appropriate binding after processing the color
+         -- information
+         
+      else
+         -- Monochrome!
+         Apply_Monochrome_Border
+           (Handle           => The_Surface.Handle,
+            Reference_Cursor => Use_Cursor,
+            LS               => Left_Side,
+            RS               => Right_Side,
+            TS               => Top_Side,
+            BS               => Bottom_Side,
+            TL               => Top_Left_Corner,
+            TR               => Top_Right_Corner,
+            BL               => Bottom_Left_Corner,
+            BR               => Bottom_Right_Corner);
+         
+      end if;
+      
+      Set_Modified (The_Surface);
+      
+   exception
+      when Surface_Unavailable | Curses_Library =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Set_Background: Unexpected exception: " &
+           Exceptions.Exception_Information (e);
+   end Generic_Set_Border;
+   ----------------------------------------
+   
+   
+   overriding
+   procedure Set_Border (The_Surface: in out Terminal_Surface;
+                         Use_Cursor : in     Cursor'Class;
+                         
+                         Left_Side,
+                           Right_Side,
+                           Top_Side,
+                           Bottom_Side,
+                           
+                           Top_Left_Corner,
+                           Top_Right_Corner,
+                           Bottom_Left_Corner,
+                           Bottom_Right_Corner: in Graphic_Character)
+   is
+      procedure Set_Border_Actual is new Generic_Set_Border
+        (Character_Type          => Character,
+         Apply_Colored_Border    => Terminals.Color.Apply_Colored_Border,
+         Apply_Monochrome_Border => Binding.Render.Set_Monochrome_Border)
+        with Inline;
+   begin
+      Set_Border_Actual (The_Surface         => The_Surface,
+                         Use_Cursor          => Use_Cursor,
+                         
+                         Left_Side           => Left_Side,
+                         Right_Side          => Right_Side,
+                         Top_Side            => Top_Side,
+                         Bottom_Side         => Bottom_Side,
+                         
+                         Top_Left_Corner     => Top_Left_Corner,
+                         Top_Right_Corner    => Top_Right_Corner,
+                         Bottom_Left_Corner  => Bottom_Left_Corner,
+                         Bottom_Right_Corner => Bottom_Right_Corner);
+                         
+   end Set_Border;
+   ----------------------------------------
+   
+   -- Wide_Character support
+   overriding
+   procedure Wide_Set_Border (The_Surface: in out Terminal_Surface;
+                              Use_Cursor : in     Cursor'Class;
+                         
+                              Left_Side,
+                              Right_Side,
+                              Top_Side,
+                              Bottom_Side,
+                                
+                              Top_Left_Corner,
+                              Top_Right_Corner,
+                              Bottom_Left_Corner,
+                              Bottom_Right_Corner: in Wide_Graphic_Character;
+                              
+                              Wide_Fallback: access 
+                                function (Item: Wide_Character) 
+                                         return Character := null)
+   is
+      procedure Set_Border_Actual is new Generic_Set_Border
+        (Character_Type          => Wide_Character,
+         Apply_Colored_Border    => Terminals.Color.Wide_Apply_Colored_Border,
+         Apply_Monochrome_Border 
+           => Binding.Render.Wide.Wide_Set_Monochrome_Border)
+        with Inline;
+   begin
+      if not Binding.Render.Wide.Wide_Support_Configured then
+         if Wide_Fallback = null then
+            raise Curses_Library with
+              "Binding not configured with Wide_String support, " &
+              "and no Wide_Fallback provided";
+         else
+            The_Surface.Set_Border
+              (Use_Cursor          => Use_Cursor,
+               
+               Left_Side           => Wide_Fallback (Left_Side),
+               Right_Side          => Wide_Fallback (Right_Side),
+               Top_Side            => Wide_Fallback (Top_Side),
+               Bottom_Side         => Wide_Fallback (Bottom_Side),
+               
+               Top_Left_Corner     => Wide_Fallback (Top_Left_Corner),
+               Top_Right_Corner    => Wide_Fallback (Top_Right_Corner),
+               Bottom_Left_Corner  => Wide_Fallback (Bottom_Left_Corner),
+               Bottom_Right_Corner => Wide_Fallback (Bottom_Right_Corner));
+         end if;
+      else
+         Set_Border_Actual (The_Surface         => The_Surface,
+                            Use_Cursor          => Use_Cursor,
+                            
+                            Left_Side           => Left_Side,
+                            Right_Side          => Right_Side,
+                            Top_Side            => Top_Side,
+                            Bottom_Side         => Bottom_Side,
+                            
+                            Top_Left_Corner     => Top_Left_Corner,
+                            Top_Right_Corner    => Top_Right_Corner,
+                            Bottom_Left_Corner  => Bottom_Left_Corner,
+                            Bottom_Right_Corner => Bottom_Right_Corner);
+      end if;
+   end Wide_Set_Border;
    
    
    ----------------

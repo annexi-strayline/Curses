@@ -5,11 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---            Standard Terminal IO Root Objects (Surface) Package           --
---                                                                          --
--- ------------------------------------------------------------------------ --
---                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -65,8 +61,10 @@ package Curses.Terminals.Surfaces is
    -- Surface'Class Required Implementations --
    --------------------------------------------
    overriding
-   function  Available (The_Surface: Terminal_Surface) 
-                       return Boolean;
+   function  Wide_Support (The_Surface: Terminal_Surface) return Boolean;
+   
+   overriding
+   function  Available (The_Surface: Terminal_Surface)    return Boolean;
    
    overriding
    function  Current_Cursor (The_Surface: Terminal_Surface)
@@ -115,9 +113,6 @@ package Curses.Terminals.Surfaces is
                             Last_Column : in     Cursor_Ordinal);
    
    overriding
-   procedure Clear_To_End  (The_Surface: in out Terminal_Surface);
-   
-   overriding
    procedure Clear_To_End  (The_Surface: in out Terminal_Surface;
                             From       : in     Cursor'Class);
    
@@ -125,31 +120,85 @@ package Curses.Terminals.Surfaces is
    procedure Put (The_Surface   : in out Terminal_Surface;
                   Set_Cursor    : in out Cursor'Class;
                   Content       : in     String;
-                  Justify       : in     Justify_Mode    := Left;
-                  Overflow      : in     Overflow_Mode   := Truncate;
-                  Advance_Cursor: in     Boolean         := False);
+                  Justify       : in     Justify_Mode  := Left;
+                  Overflow      : in     Overflow_Mode := Truncate;
+                  Advance_Cursor: in     Boolean       := False);
    
    
    overriding
-   procedure Fill (The_Surface: in out Terminal_Surface;
-                   Pattern    : in     String);
+   procedure Wide_Put
+     (The_Surface   : in out Terminal_Surface;
+      Set_Cursor    : in out Cursor'Class;
+      Content       : in     Wide_String;
+      Justify       : in     Justify_Mode          := Left;
+      Overflow      : in     Overflow_Mode         := Truncate;
+      Advance_Cursor: in     Boolean               := False;
+      Wide_Fallback : access 
+        function (Item: Wide_String) return String := null);
+   
    
    overriding
    procedure Fill (The_Surface: in out Terminal_Surface;
                    Pattern    : in     String;
                    Fill_Cursor: in     Cursor'Class);
    
+   overriding
+   procedure Wide_Fill (The_Surface  : in out Terminal_Surface;
+                        Pattern      : in     Wide_String;
+                        Fill_Cursor  : in     Cursor'Class;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null);
+   
 
    overriding
    procedure Set_Background (The_Surface   : in out Terminal_Surface;
-                             Fill_Character: in     Character := ' ';
+                             Fill_Character: in     Graphic_Character := ' ';
                              Fill_Cursor   : in     Cursor'Class);
    
-   overriding procedure Set_Background
+   
+   overriding
+   procedure Wide_Set_Background
      (The_Surface   : in out Terminal_Surface;
-      Fill_Character: in     Character := ' ');
+      Fill_Character: in     Wide_Graphic_Character := ' ';
+      Fill_Cursor   : in     Cursor'Class;
+      Wide_Fallback : access function (Item: Wide_Character) 
+                                      return Character := null);
    
+   overriding
+   procedure Set_Border (The_Surface: in out Terminal_Surface;
+                         Use_Cursor : in     Cursor'Class);
    
+   overriding
+   procedure Set_Border (The_Surface: in out Terminal_Surface;
+                         Use_Cursor : in     Cursor'Class;
+                         
+                         Left_Side,
+                         Right_Side,
+                         Top_Side,
+                         Bottom_Side,
+                           
+                         Top_Left_Corner,
+                         Top_Right_Corner,
+                         Bottom_Left_Corner,
+                         Bottom_Right_Corner: in Graphic_Character);
+   
+   overriding
+   procedure Wide_Set_Border (The_Surface: in out Terminal_Surface;
+                              Use_Cursor : in     Cursor'Class;
+                              
+                              Left_Side,
+                              Right_Side,
+                              Top_Side,
+                              Bottom_Side,
+                                
+                              Top_Left_Corner,
+                              Top_Right_Corner,
+                              Bottom_Left_Corner,
+                              Bottom_Right_Corner: in Wide_Graphic_Character;
+                              
+                              Wide_Fallback: access 
+                                function (Item: Wide_Character) 
+                                         return Character := null);
    
    overriding
    procedure Transcribe (Source : in out Terminal_Surface;
@@ -166,6 +215,8 @@ package Curses.Terminals.Surfaces is
                          Rows   : in     Cursor_Ordinal;
                          Columns: in     Cursor_Ordinal;
                          Clip   : in     Boolean := False);
+   
+
    
    
    -- Finalization --

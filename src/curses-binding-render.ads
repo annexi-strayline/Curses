@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -180,6 +180,28 @@ package Curses.Binding.Render is
    -- *  Curses_Library: Call failed - unable to apply color style
    
    
+   procedure Set_Default_Monochrome_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class);
+   
+   procedure Set_Monochrome_Border 
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Character);
+   
+   -- Sets the border around a given Surface. Set_Default_Border defers to the
+   -- (n) curses library itself to determine which box drawing characters are
+   -- appropriate. Set_Border allows the specification of a specific set of
+   -- characters to be used for box drawing.
+   --
+   -- Reference_Cursor is used to set the appropriate attributes for the
+   -- characters used to draw the border
+   --
+   -- -- All Possible Exceptions --
+   -- *  Curses_Library: Call failed - unable to set border
+   
+   
+   
    procedure Copy_Area (From_Handle : in Surface_Handle;
                         From_TL     : in Cursor_Position;
                         
@@ -193,7 +215,99 @@ package Curses.Binding.Render is
    -- -- All Possible Exceptions --
    -- *  Curses_Library: Call failed - unable to copy area.
                         
+private
    
-
+   --
+   -- Generic implementations where Wide_Support is needed
+   --
+   
+   ------------------------
+   -- Generic_Put_String --
+   ------------------------
+   generic
+      type Ada_Character_Type is (<>);
+      type Ada_String_Type is array (Positive range <>) of Ada_Character_Type;
+      
+      type C_Character_Type is (<>);
+      type C_String_Type is array (size_t range <>) of C_Character_Type;
+      
+      with function To_C (Item      : in Ada_String_Type;
+                          Append_Nul: in Boolean)
+                         return C_String_Type;
+   
+      with function CURSES_generic_waddstr (win: Surface_Handle;
+                                            str: C_String_Type)
+                                           return int;
+   
+   procedure Generic_Put_String (Handle: in Surface_Handle;
+                                 Buffer: in Ada_String_Type);
+   
+   
+   ------------------------
+   -- Generic_Get_String --
+   ------------------------
+   generic
+      type Ada_Character_Type is (<>);
+      type Ada_String_Type is array (Positive range <>) of Ada_Character_Type;
+      
+      type C_Character_Type is (<>);
+      type C_String_Type is array (size_t range <>) of C_Character_Type;
+      
+      with function To_Ada (Item    : in C_String_Type;
+                            Trim_Nul: in Boolean)
+                           return Ada_String_Type;
+   
+      with function CURSES_generic_winnstr (win: in     Surface_Handle; 
+                                            str: in out C_String_Type;
+                                            len: in     int)
+                                           return int;
+   
+   procedure Generic_Get_String (Handle: in     Surface_Handle;
+                                 Buffer:    out Ada_String_Type;
+                                 Last  :    out Natural);
+   
+   ---------------------------------------
+   -- Generic_Set_Monochrome_Background --
+   ---------------------------------------
+   generic
+      type Ada_Char_Type is (<>);
+      type C_Char_Type   is (<>);
+      
+      with function To_C (Item: in Ada_Char_Type) return C_Char_Type;
+      
+      with function CURSES_generic_meta_set_background 
+        (win  : in Surface_Handle;
+         blank: in C_Char_Type;
+         bold, standout, dim, uline, invert,
+         blink: in unsigned)
+        return bool;
+   
+   procedure Generic_Set_Monochrome_Background
+     (Handle          : in Surface_Handle;
+      Blank_Character : in Ada_Char_Type;
+      Reference_Cursor: in Cursor'Class);
+   
+   
+   -----------------------------------
+   -- Generic_Set_Monochrome_Border --
+   -----------------------------------
+   generic
+      type Ada_Char_Type is (<>);
+      type C_Char_Type   is (<>);
+      
+      with function To_C (Item: in Ada_Char_Type) return C_Char_Type;
+      
+      with function CURSES_generic_meta_wborder
+        (win  : in Surface_Handle;
+         bold, standout, dim, uline, invert,
+         blink: in unsigned;
+         ls, rs, ts, bs, tl, tr, bl,
+         br   : in C_Char_Type)
+        return bool;
+   
+   procedure Generic_Set_Monochrome_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Ada_Char_Type);
    
 end Curses.Binding.Render;

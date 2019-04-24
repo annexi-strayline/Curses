@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -102,8 +102,8 @@ package body Curses.Binding.Render is
      Import        => True,
      Convention    => C,
      External_Name => "__binding_curses_wmove";
-   -- In case you're wondering - according to the wmove man page: "move may be a
-   -- macro".
+   -- In case you're wondering - according to the wmove man page: "move may be
+   -- a macro".
    
    procedure CURSES_meta_wattrset 
      (win                  : in Surface_Handle;
@@ -113,8 +113,8 @@ package body Curses.Binding.Render is
      Import        => True,
      Convention    => C,
      External_Name => "__binding_curses_meta_wattrset";
-   -- Calls wattrset on the target window as per the opeartions specified in the
-   -- various parameters. For "unsigned" parameters, zero is off, any other
+   -- Calls wattrset on the target window as per the opeartions specified in
+   -- the various parameters. For "unsigned" parameters, zero is off, any other
    -- value is on.
    --
    -- Note that color is ignored in this operation, and for terminals that
@@ -126,6 +126,7 @@ package body Curses.Binding.Render is
      Convention    => C,
      External_Name => "__binding_curses_meta_wclrch";
    -- Clears the character at the position 
+   
    
    function CURSES_waddstr (win: Surface_Handle; str: char_array) return int
      with
@@ -176,7 +177,7 @@ package body Curses.Binding.Render is
      External_Name => "__binding_curses_wclrtoeol";
    
    function CURSES_meta_wbkgd (win   : in Surface_Handle;
-                               blank : in int;
+                               blank : in char;
                                bold, standout, dim, uline, invert,
                                blink : in unsigned)
                               return bool
@@ -185,6 +186,26 @@ package body Curses.Binding.Render is
      Convention    => C,
      External_Name => "__binding_curses_meta_wbkgd";
    -- Returns Bool_False on failure
+   
+   function CURSES_meta_default_wborder (win: in Surface_Handle;
+                                         bold, standout, dim, uline, invert,
+                                         blink: in unsigned)
+                                        return bool
+     with
+     Import        => True,
+     Convention    => C,
+     External_Name => "__binding_curses_meta_default_wborder";
+   -- calls wborder with the "default" arguments. 
+   
+   function CURSES_meta_wborder (win: in Surface_Handle;
+                                 bold, standout, dim, uline, invert,
+                                 blink: in unsigned;
+                                 ls, rs, ts, bs, tl, tr, bl, br: in char)
+                                return bool
+     with
+     Import        => True,
+     Convention    => C,
+     External_Name => "__binding_curses_meta_wborder";
    
    function CURSES_copywin (srcwin : in Surface_Handle;
                             dstwin : in Surface_Handle;
@@ -246,8 +267,8 @@ package body Curses.Binding.Render is
       Locked := True;
       
       if not Select_Terminal (TTY) then
-         -- This should be impossible, as we've already screened the validity of
-         -- the Handle.
+         -- This should be impossible, as we've already screened the validity
+         -- of the Handle.
          raise Curses_Library with "Terminal select failed";
       end if;
       
@@ -611,14 +632,15 @@ package body Curses.Binding.Render is
          end if;
    end Clear_Character;
    
+   
    ----------------
    -- Put_String --
    ----------------
-   procedure Put_String (Handle: in Surface_Handle;
-                         Buffer: in String)
+   procedure Generic_Put_String (Handle: in Surface_Handle;
+                                 Buffer: in Ada_String_Type)
    is
-      Locked  : Boolean    := False;
-      C_Buffer: char_array := To_C (Buffer);
+      Locked  : Boolean       := False;
+      C_Buffer: C_String_Type := To_C (Item => Buffer, Append_Nul => True);
    begin
       if not Handle_Valid (Handle) then
          raise Surface_Unavailable;
@@ -627,7 +649,7 @@ package body Curses.Binding.Render is
       Lock_Or_Panic;
       Locked := True;
       
-      if CURSES_waddstr (win => Handle, str => C_Buffer) /= 0 then
+      if CURSES_generic_waddstr (win => Handle, str => C_Buffer) /= 0 then
          Serial.Unlock;
          raise Curses_Library with
            "Failed to write string to surface";
@@ -647,19 +669,38 @@ package body Curses.Binding.Render is
          raise Curses_Library with
            "Unexpected exception: " & Exceptions.Exception_Information (e);
       
+   end Generic_Put_String;
+   
+   
+   ----------------------------------------
+   procedure Put_String (Handle: in Surface_Handle;
+                         Buffer: in String)
+   is
+      procedure Put_String_Actual is new Generic_Put_String
+        (Ada_Character_Type     => Character,
+         Ada_String_Type        => String,
+         C_Character_Type       => Interfaces.C.char,
+         C_String_Type          => Interfaces.C.char_array,
+         To_C                   => Interfaces.C.To_C,
+         CURSES_generic_waddstr => CURSES_waddstr)
+        with Inline;
+   begin
+      Put_String_Actual (Handle => Handle, Buffer => Buffer);
    end Put_String;
+
    
    
    ----------------
    -- Get_String --
    ----------------
-   procedure Get_String (Handle: in     Surface_Handle;
-                         Buffer:    out String;
-                         Last  :    out Natural)
+   procedure Generic_Get_String (Handle: in     Surface_Handle;
+                                 Buffer:    out Ada_String_Type;
+                                 Last  :    out Natural)
    is
-     Locked       : Boolean    := False;
-     Buffer_Length: size_t;
-     -- We set the Buffer size inside of the procedure in the off-chance that it
+      Locked       : Boolean    := False;
+      Buffer_Length: size_t;
+      -- We set the Buffer size inside of the procedure in the off-chance that
+      -- it raises an exception.
    begin
       if not Handle_Valid (Handle) then
          raise Surface_Unavailable;
@@ -669,7 +710,7 @@ package body Curses.Binding.Render is
       Buffer_Length := Buffer'Length;
       
       declare
-         C_Buffer: char_array (1 .. Buffer_Length + 1);
+         C_Buffer: C_String_Type (1 .. Buffer_Length + 1);
          -- Length + 1 since the man page for winnstr does not specify if n
          -- includes the NUL termination. So obviously it is safer to assume
          -- that it does not.
@@ -679,10 +720,14 @@ package body Curses.Binding.Render is
          
          Lock_Or_Panic;
          Locked := True;
-      
-         Read_In := CURSES_winnstr (win => Handle, 
-                                    str => C_Buffer,
-                                    len => int (Buffer_Length));
+         
+         Read_In := CURSES_generic_winnstr (win => Handle, 
+                                            str => C_Buffer,
+                                            len => int (Buffer_Length));
+         -- Note that we do the size_t -> int conversion in the safety of Ada,
+         -- which protects from any overflows. The actual curses winnstr
+         -- function does weirdly take int for the length
+         
          Serial.Unlock;
          Locked := False;
          
@@ -691,7 +736,7 @@ package body Curses.Binding.Render is
          Buffer(Buffer'First .. Last) := To_Ada (Item     => C_Buffer, 
                                                  Trim_Nul => True);
       end;
-         
+      
    exception
       when Surface_Unavailable =>
          raise;
@@ -703,13 +748,32 @@ package body Curses.Binding.Render is
          
          raise Curses_Library with
            "Unexpected exception: " & Exceptions.Exception_Information (e);
-      
+         
+   end Generic_Get_String;
+   
+   ----------------------------------------
+   procedure Get_String (Handle: in     Surface_Handle;
+                         Buffer:    out String;
+                         Last  :    out Natural)
+   is
+      procedure Get_String_Actual is new Generic_Get_String
+        (Ada_Character_Type => Character,
+         Ada_String_Type    => String,
+         C_Character_Type   => Interfaces.C.char,
+         C_String_Type      => Interfaces.C.char_array,
+         To_Ada             => Interfaces.C.To_Ada,
+         CURSES_generic_winnstr => CURSES_winnstr)
+        with Inline;
+   begin
+      Get_String_Actual (Handle => Handle,
+                         Buffer => Buffer,
+                         Last   => Last);
    end Get_String;
    
    
-   ------------------
-   -- Draw_Surface --
-   ------------------
+   --------------------
+   -- Render_Surface --
+   --------------------
    procedure Render_Surface (Handle     : in Surface_Handle;
                              Surface_TL : in Cursor_Position;
                              Physical_TL: in Cursor_Position;
@@ -806,13 +870,14 @@ package body Curses.Binding.Render is
    -------------------------------
    -- Set_Monochrome_Background --
    -------------------------------
-   procedure Set_Monochrome_Background (Handle          : in Surface_Handle;
-                                        Blank_Character : in Character;
-                                        Reference_Cursor: in Cursor'Class)
+   procedure Generic_Set_Monochrome_Background
+     (Handle          : in Surface_Handle;
+      Blank_Character : in Ada_Char_Type;
+      Reference_Cursor: in Cursor'Class)
    is
       Set_Bold, Set_Standout, Set_Dim, 
-      Set_Uline, Set_Invert, Set_Blink: unsigned := 0;
-        
+        Set_Uline, Set_Invert, Set_Blink: unsigned := 0;
+      
       Lock_OK     : Boolean := False;
       Result      : Bool;
       
@@ -821,6 +886,7 @@ package body Curses.Binding.Render is
          raise Curses_Library with
            "Surface handle invalid";
       end if;
+      
       
       if Reference_Cursor.Style.Bold then
          Set_Bold := unsigned'Last;
@@ -849,22 +915,22 @@ package body Curses.Binding.Render is
       Lock_Or_Panic;
       Lock_OK := True;
       
-      Result := CURSES_meta_wbkgd
+      Result := CURSES_generic_meta_set_background
         (win      => Handle,
-         blank    => int(Character'Pos(Blank_Character)),
+         blank    => To_C (Blank_Character),
          bold     => Set_Bold, 
          standout => Set_Standout,
          dim      => Set_Dim,
          uline    => Set_Uline,
          invert   => Set_Invert,
          blink    => Set_Blink);
-        
+      
       Serial.Unlock;
       Lock_OK := False;
       
       if Result /= Bool_True then
          raise Curses_Library with
-           "Library call to wbkgd () (without color attributes) failed.";
+           "Library call to wbkg(rn)d () (without color attributes) failed.";
       end if;
       
       
@@ -877,8 +943,222 @@ package body Curses.Binding.Render is
             Serial.Unlock;
          end if;
          raise Curses_Library with "Unexpected exception";
-      
+         
+   end Generic_Set_Monochrome_Background;
+   
+   
+   ----------------------------------------
+   procedure Set_Monochrome_Background (Handle          : in Surface_Handle;
+                                        Blank_Character : in Character;
+                                        Reference_Cursor: in Cursor'Class)
+   is
+      procedure Set_Monochrome_Background_Actual is 
+        new Generic_Set_Monochrome_Background
+          (Ada_Char_Type => Character,
+           C_Char_Type   => char,
+           To_C          => Interfaces.C.To_C,
+           
+           CURSES_generic_meta_set_background => CURSES_meta_wbkgd)
+        with Inline;
+   begin
+      Set_Monochrome_Background_Actual
+        (Handle           => Handle,
+         Blank_Character  => Blank_Character,
+         Reference_Cursor => Reference_Cursor);
    end Set_Monochrome_Background;
+   
+   
+   -----------------------------------
+   -- Set_Default_Monochrome_Border --
+   -----------------------------------
+   procedure Set_Default_Monochrome_Border 
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class)
+   is
+      Set_Bold, Set_Standout, Set_Dim, 
+        Set_Uline, Set_Invert, Set_Blink: unsigned := 0;
+      
+      Lock_OK     : Boolean := False;
+      Result      : Bool;
+      
+   begin
+      if not Handle_Valid (Handle) then
+         raise Curses_Library with
+           "Surface handle invalid";
+      end if;
+      
+      
+      if Reference_Cursor.Style.Bold then
+         Set_Bold := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Standout then
+         Set_Standout := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Dim then
+         Set_Dim := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Underline then
+         Set_Uline := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Inverted then
+         Set_Invert := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Blink then
+         Set_Blink := unsigned'Last;
+      end if;
+      
+      Lock_Or_Panic;
+      Lock_OK := True;
+      
+      Result := CURSES_meta_default_wborder
+        (win      => Handle,
+         bold     => Set_Bold, 
+         standout => Set_Standout,
+         dim      => Set_Dim,
+         uline    => Set_Uline,
+         invert   => Set_Invert,
+         blink    => Set_Blink);
+      
+      Serial.Unlock;
+      Lock_OK := False;
+      
+      if Result /= Bool_True then
+         raise Curses_Library with
+           "Library call to wbkg(rn)d () (without color attributes) failed.";
+      end if;
+      
+      
+   exception
+      when Curses_Library =>
+         raise;
+         
+      when others =>
+         if Lock_OK then
+            Serial.Unlock;
+         end if;
+         raise Curses_Library with "Unexpected exception";
+         
+   end Set_Default_Monochrome_Border;
+   
+   
+   ---------------------------
+   -- Set_Monochrome_Border --
+   ---------------------------
+   procedure Generic_Set_Monochrome_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Ada_Char_Type)
+   is
+      Set_Bold, Set_Standout, Set_Dim, 
+        Set_Uline, Set_Invert, Set_Blink: unsigned := 0;
+      
+      Lock_OK     : Boolean := False;
+      Result      : Bool;
+      
+   begin
+      if not Handle_Valid (Handle) then
+         raise Curses_Library with
+           "Surface handle invalid";
+      end if;
+      
+      
+      if Reference_Cursor.Style.Bold then
+         Set_Bold := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Standout then
+         Set_Standout := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Dim then
+         Set_Dim := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Underline then
+         Set_Uline := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Inverted then
+         Set_Invert := unsigned'Last;
+      end if;
+      
+      if Reference_Cursor.Style.Blink then
+         Set_Blink := unsigned'Last;
+      end if;
+      
+      Lock_Or_Panic;
+      Lock_OK := True;
+      
+      Result := CURSES_generic_meta_wborder
+        (win      => Handle,
+         bold     => Set_Bold, 
+         standout => Set_Standout,
+         dim      => Set_Dim,
+         uline    => Set_Uline,
+         invert   => Set_Invert,
+         blink    => Set_Blink,
+         
+         ls => To_C (LS),
+         rs => To_C (RS),
+         ts => To_C (TS),
+         bs => To_C (BS),
+         tl => To_C (TL),
+         tr => To_C (TR),
+         bl => To_C (BL),
+         br => To_C (BR));
+      
+      Serial.Unlock;
+      Lock_OK := False;
+      
+      if Result /= Bool_True then
+         raise Curses_Library with
+           "Library call to wbkg(rn)d () (without color attributes) failed.";
+      end if;
+      
+      
+   exception
+      when Curses_Library =>
+         raise;
+         
+      when others =>
+         if Lock_OK then
+            Serial.Unlock;
+         end if;
+         raise Curses_Library with "Unexpected exception";
+         
+   end Generic_Set_Monochrome_Border;
+   ----------------------------------------
+   
+   procedure Set_Monochrome_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Character)
+   is
+      procedure Set_Monochrome_Border_Actual is 
+        new Generic_Set_Monochrome_Border 
+          (Ada_Char_Type => Character,
+           C_Char_Type   => char,
+           To_C => Interfaces.C.To_C,
+           CURSES_generic_meta_wborder => CURSES_meta_wborder)
+        with Inline;
+      
+   begin
+      Set_Monochrome_Border_Actual (Handle           => Handle,
+                                    Reference_Cursor => Reference_Cursor,
+                                    LS               => LS,
+                                    RS               => RS,
+                                    TS               => TS,
+                                    BS               => BS,
+                                    TL               => TL,
+                                    TR               => TR,
+                                    BL               => BL,
+                                    BR               => BR);
+   end Set_Monochrome_Border;
    
    
    ---------------

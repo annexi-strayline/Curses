@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -132,5 +132,86 @@ package Curses.Binding.Color is
    --
    -- -- All Possible Exceptions --
    -- *  Curses_Library: Call failed - unable to apply color style
+   
+   
+   procedure Set_Default_Colored_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair);
+   
+   procedure Set_Colored_Border 
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Character);
+   -- Sets the border around a given Surface. Set_Default_Border defers to the
+   -- (n) curses library itself to determine which box drawing characters are
+   -- appropriate. Set_Border allows the specification of a specific set of
+   -- characters to be used for box drawing.
+   --
+   -- Reference_Cursor is used to set the appropriate attributes for the
+   -- characters used to draw the border
+   --
+   -- The provided Color pair is applies to border along with the attributes
+   -- of Reference_Cursor
+   --
+   -- This procedure is called from the Terminals.Color package via the
+   -- Apply_Colored_Border procedure, which provides the correct value for
+   -- Color, based on the content of the Color property of the Colored_Cursor
+   -- type also defined in the Terminals.Color package.
+   --
+   -- -- All Possible Exceptions --
+   -- *  Curses_Library: Call failed - unable to set border
+   
+   
+private
+   
+   ------------------------------------
+   -- Generic_Set_Colored_Background --
+   ------------------------------------
+   generic
+      type Ada_Char_Type is (<>);
+      type C_Char_Type   is (<>);
+   
+      with function To_C (Item: in Ada_Char_Type) return C_Char_Type;
+   
+      with function CURSES_generic_meta_set_background_color
+        (win  : in Surface_Handle;
+         blank: in C_Char_Type;
+         bold, standout, dim, uline, invert,
+         blink: in unsigned;
+         pair : in CURSES_Color_Pair)
+        return bool;
+        
+   procedure Generic_Set_Colored_Background
+     (Handle          : in Surface_Handle;
+      Blank_Character : in Ada_Char_Type;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair);
+   
+   
+   --------------------------------
+   -- Generic_Set_Colored_Border --
+   --------------------------------
+   generic
+      type Ada_Char_Type is (<>);
+      type C_Char_Type   is (<>);
+      
+      with function To_C (Item: in Ada_Char_Type) return C_Char_Type;
+      
+      with function CURSES_generic_meta_wborder_color
+        (win  : in Surface_Handle;
+         bold, standout, dim, uline, invert,
+         blink: in unsigned;
+         pair : in short;
+         ls, rs, ts, bs, tl, tr, bl,
+         br   : in C_Char_Type)
+        return bool;
+   
+   procedure Generic_Set_Colored_Border
+     (Handle          : in Surface_Handle;
+      Reference_Cursor: in Cursor'Class;
+      Color           : in CURSES_Color_Pair;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Ada_Char_Type);
    
 end Curses.Binding.Color;

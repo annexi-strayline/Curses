@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -73,6 +73,337 @@ package body Curses is
          Buffer(36 .. Buffer'Last) := String'(36 .. Buffer'Last => Space);
       
    end Set_Library_Error_Message;
+   
+   
+   --
+   -- Surface Class-Wide Operations
+   --
+   
+   ------------------
+   -- Clear_To_End --
+   ------------------
+   procedure Clear_To_End (The_Surface: in out Surface'Class) is
+   begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Clear_To_End (From => Use_Cursor);
+      end;
+      
+   exception
+      when others =>
+         return;
+   end Clear_To_End;
+   
+   
+   ---------
+   -- Put --
+   ---------
+   procedure Put (The_Surface   : in out Surface'Class;
+                  Content       : in     String;
+                  Justify       : in     Justify_Mode    := Left;
+                  Overflow      : in     Overflow_Mode   := Truncate;
+                  Advance_Cursor: in     Boolean         := False)
+   is
+   begin
+      declare
+         -- Block to contain any incorrectly implemented derrivations
+         -- of Surface, which could raise unexpected exceptions
+         
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- We've already checked the Precondition on entry to this subprogram,
+         -- let's disable it for the later dispatch to Put.
+         
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         
+         The_Surface.Put (Set_Cursor     => Use_Cursor,
+                          Content        => Content,
+                          Justify        => Justify,
+                          Overflow       => Overflow,
+                          Advance_Cursor => Advance_Cursor);
+         
+         if Advance_Cursor then
+            The_Surface.Current_Cursor (Use_Cursor);
+         end if;
+      end;
+      
+   exception
+      when
+        Assertion_Error     |
+        Surface_Unavailable |
+        Cursor_Excursion    |
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with 
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Put;
+   
+   
+   ----------------------------------------
+   procedure Wide_Put
+     (The_Surface   : in out Surface'Class;
+      Content       : in     Wide_String;
+      Justify       : in     Justify_Mode          := Left;
+      Overflow      : in     Overflow_Mode         := Truncate;
+      Advance_Cursor: in     Boolean               := False;
+      Wide_Fallback : access 
+        function (Item: Wide_String) return String := null)
+   is
+   begin
+      declare
+         -- Block to contain any incorrectly implemented derrivations
+         -- of Surface, which could raise unexpected exceptions
+         
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- We've already checked the Precondition on entry to this subprogram,
+         -- let's disable it for the later dispatch to Put.
+         
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         
+         The_Surface.Wide_Put (Set_Cursor     => Use_Cursor,
+                               Content        => Content,
+                               Justify        => Justify,
+                               Overflow       => Overflow,
+                               Advance_Cursor => Advance_Cursor,
+                               Wide_Fallback  => Wide_Fallback);
+         
+         if Advance_Cursor then
+            The_Surface.Current_Cursor (Use_Cursor);
+         end if;
+      end;
+      
+   exception
+      when 
+        Assertion_Error     | 
+        Surface_Unavailable | 
+        Cursor_Excursion    | 
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with 
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Wide_Put;
+   
+   
+   ----------
+   -- Fill --
+   ----------
+   procedure Fill (The_Surface: in out Surface'Class;
+                   Pattern    : in     String)
+   is
+   begin
+      declare
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- Check already passed on entry to this procedure
+         
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Fill (Pattern     => Pattern,
+                           Fill_Cursor => Use_Cursor);
+      end;
+      
+   exception
+      when
+        Assertion_Error     |
+        Surface_Unavailable |
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Fill;
+   
+   
+   -- Wide_String support
+   procedure Wide_Fill (The_Surface  : in out Surface'Class;
+                        Pattern      : in     Wide_String;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null)
+   is
+   begin
+      declare
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- Check already passed on entry to this procedure
+         
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Wide_Fill (Pattern       => Pattern,
+                                Fill_Cursor   => Use_Cursor,
+                                Wide_Fallback => Wide_Fallback);
+      end;
+      
+   exception
+      when
+        Assertion_Error     |
+        Surface_Unavailable |
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Wide_Fill;
+   
+   
+   --------------------
+   -- Set_Background --
+   --------------------
+   procedure Set_Background (The_Surface   : in out Surface'Class;
+                             Fill_Character: in     Graphic_Character := ' ')
+   is begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Set_Background (Fill_Character => Fill_Character,
+                                     Fill_Cursor    => Use_Cursor);
+      end;
+      
+   exception
+      when Surface_Unavailable | Curses_Library =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Set_Background;
+   
+   
+   -- Wide_Graphic_Character support
+   procedure Wide_Set_Background 
+     (The_Surface   : in out Surface'Class;
+      Fill_Character: in     Wide_Graphic_Character := ' ';
+      Wide_Fallback : access function (Item: Wide_Character) 
+                                      return Character := null)
+   is begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Wide_Set_Background (Fill_Character => Fill_Character,
+                                          Fill_Cursor    => Use_Cursor,
+                                          Wide_Fallback  => Wide_Fallback);
+      end;
+      
+   exception
+      when Surface_Unavailable | Curses_Library =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Wide_Set_Background;
+   
+   
+   ----------------
+   -- Set_Border --
+   ----------------
+   procedure Set_Border (The_Surface: in out Surface'Class) is
+   begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Set_Border (Use_Cursor => Use_Cursor);
+      end;
+      
+   exception
+      when 
+        Surface_Unavailable | 
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with 
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Set_Border;
+   
+   
+   ----------------------------------------
+   procedure Set_Border (The_Surface: in out Surface'Class;
+                         
+                         Left_Side,
+                         Right_Side,
+                         Top_Side,
+                         Bottom_Side,
+                           
+                         Top_Left_Corner,
+                         Top_Right_Corner,
+                         Bottom_Left_Corner,
+                         Bottom_Right_Corner: in Graphic_Character)
+   is begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Set_Border (Use_Cursor          => Use_Cursor,
+                                 Left_Side           => Left_Side,
+                                 Right_Side          => Right_Side,
+                                 Top_Side            => Top_Side,
+                                 Bottom_Side         => Bottom_Side,
+                                 Top_Left_Corner     => Top_Left_Corner,
+                                 Top_Right_Corner    => Top_Right_Corner,
+                                 Bottom_Left_Corner  => Bottom_Left_Corner,
+                                 Bottom_Right_Corner => Bottom_Right_Corner);
+      end;
+      
+   exception
+      when 
+        Surface_Unavailable | 
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with 
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Set_Border;
+   
+   
+   -- Wide_Graphic_Character support
+   procedure Wide_Set_Border (The_Surface: in out Surface'Class;
+                         
+                              Left_Side,
+                              Right_Side,
+                              Top_Side,
+                              Bottom_Side,
+                                
+                              Top_Left_Corner,
+                              Top_Right_Corner,
+                              Bottom_Left_Corner,
+                              Bottom_Right_Corner: in Wide_Graphic_Character;
+                              
+                              Wide_Fallback: access
+                                function (Item: Wide_Character) 
+                                         return Character := null)
+   is begin
+      declare
+         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
+      begin
+         The_Surface.Wide_Set_Border
+           (Use_Cursor          => Use_Cursor,
+            Left_Side           => Left_Side,
+            Right_Side          => Right_Side,
+            Top_Side            => Top_Side,
+            Bottom_Side         => Bottom_Side,
+            Top_Left_Corner     => Top_Left_Corner,
+            Top_Right_Corner    => Top_Right_Corner,
+            Bottom_Left_Corner  => Bottom_Left_Corner,
+            Bottom_Right_Corner => Bottom_Right_Corner,
+            Wide_Fallback       => Wide_Fallback);
+      end;
+      
+   exception
+      when 
+        Surface_Unavailable | 
+        Curses_Library      =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with 
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Wide_Set_Border;
    
    
    --
@@ -332,115 +663,6 @@ package body Curses is
    end Wait_Extents_Changed;
    
    
-   --
-   -- Surface Class-Wide Operations
-   --
-   
-   ---------
-   -- Put --
-   ---------
-   procedure Put (The_Surface   : in out Surface'Class;
-                  Content       : in     String;
-                  Justify       : in     Justify_Mode    := Left;
-                  Overflow      : in     Overflow_Mode   := Truncate;
-                  Advance_Cursor: in     Boolean         := False)
-   is
 
-   begin
-      declare
-         -- Block to contain any incorrectly implemented derrivations
-         -- of Surface, which could raise unexpected exceptions
-         
-         pragma Assertion_Policy (Pre'Class => Ignore);
-         -- We've already checked the Precondition on entry to this subprogram, 
-         -- let's disable it for the later dispatch to Put.
-         
-         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
-      begin
-         
-         The_Surface.Put (Set_Cursor     => Use_Cursor,
-                          Content        => Content,
-                          Justify        => Justify,
-                          Overflow       => Overflow,
-                          Advance_Cursor => Advance_Cursor);
-         
-         if Advance_Cursor then
-            The_Surface.Current_Cursor (Use_Cursor);
-         end if;
-      end;
-      
-   exception
-      when 
-        Assertion_Error     | 
-        Surface_Unavailable | 
-        Cursor_Excursion    | 
-        Curses_Library      =>
-         raise;
-         
-      when e: others =>
-         raise Curses_Library with 
-           "Unexpected exception: " & Exceptions.Exception_Information (e);
-   end Put;
-   
-   
-   ----------------
-   -- Set_Border --
-   ----------------
-   procedure Set_Border (The_Surface: in out Surface'Class) is
-   begin
-      declare
-         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
-      begin
-         The_Surface.Set_Border (Use_Cursor => Use_Cursor);
-      end;
-      
-   exception
-      when 
-        Surface_Unavailable | 
-        Curses_Library      =>
-         raise;
-         
-      when e: others =>
-         raise Curses_Library with 
-           "Unexpected exception: " & Exceptions.Exception_Information (e);
-   end Set_Border;
-   
-   ----------------------------------------
-   procedure Set_Border (The_Surface: in out Surface'Class;
-                         
-                         Left_Side,
-                         Right_Side,
-                         Top_Side,
-                         Bottom_Side,
-                           
-                         Top_Left_Corner,
-                         Top_Right_Corner,
-                         Bottom_Left_Corner,
-                         Bottom_Right_Corner: in Graphic_Character)
-   is begin
-      declare
-         Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
-      begin
-         The_Surface.Set_Border (Use_Cursor          => Use_Cursor,
-                                 Left_Side           => Left_Side,
-                                 Right_Side          => Right_Side,
-                                 Top_Side            => Top_Side,
-                                 Bottom_Side         => Bottom_Side,
-                                 Top_Left_Corner     => Top_Left_Corner,
-                                 Top_Right_Corner    => Top_Right_Corner,
-                                 Bottom_Left_Corner  => Bottom_Left_Corner,
-                                 Bottom_Right_Corner => Bottom_Right_Corner);
-      end;
-      
-   exception
-      when 
-        Surface_Unavailable | 
-        Curses_Library      =>
-         raise;
-         
-      when e: others =>
-         raise Curses_Library with 
-           "Unexpected exception: " & Exceptions.Exception_Information (e);
-   end Set_Border;
    
 end Curses;

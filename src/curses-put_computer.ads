@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -54,11 +54,14 @@
 -- subprograms.
 
 generic
+   type Character_Type is (<>);
+   type String_Type is array (Positive range <>) of Character_Type;
+   
    The_Surface: in out Surface'Class;
    Write_Head : in out Cursor_Position;
    Justify    : in     Justify_Mode;
    Overflow   : in     Overflow_Mode;
-   Content    : in     String;
+   Content    : in     String_Type;
    
 package Curses.Put_Computer is
    
