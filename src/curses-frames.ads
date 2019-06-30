@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -59,8 +59,6 @@
 private with Curses.Terminals.Color;
 
 package Curses.Frames is
-   
-   pragma Assertion_Policy (Check);
    
    -----------
    -- Frame --
@@ -173,9 +171,6 @@ package Curses.Frames is
                             Last_Column : in     Cursor_Ordinal);
    
    overriding
-   procedure Clear_To_End (The_Surface: in out Frame);
-   
-   overriding
    procedure Clear_To_End (The_Surface: in out Frame;
                            From       : in     Cursor'Class);
    -- All Clear overrides are implemented through Put operations of the Space 
@@ -194,26 +189,87 @@ package Curses.Frames is
                   Advance_Cursor: in     Boolean         := False);
    
    overriding
-   procedure Fill (The_Surface: in out Frame;
-                   Pattern    : in     String);
+   procedure Wide_Put
+     (The_Surface   : in out Frame;
+      Set_Cursor    : in out Cursor'Class;
+      Content       : in     Wide_String;
+      Justify       : in     Justify_Mode          := Left;
+      Overflow      : in     Overflow_Mode         := Truncate;
+      Advance_Cursor: in     Boolean               := False;
+      Wide_Fallback : access 
+        function (Item: Wide_String) return String := null);
+   
    
    overriding
    procedure Fill (The_Surface: in out Frame;
                    Pattern    : in     String;
                    Fill_Cursor: in     Cursor'Class);
    
+   overriding
+   procedure Wide_Fill (The_Surface  : in out Frame;
+                        Pattern      : in     Wide_String;
+                        Fill_Cursor  : in     Cursor'Class;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null);
+   
    
    overriding
    procedure Set_Background (The_Surface   : in out Frame;
-                             Fill_Character: in     Character := ' ');
-   
-   overriding
-   procedure Set_Background (The_Surface   : in out Frame;
-                             Fill_Character: in     Character := ' ';
+                             Fill_Character: in     Graphic_Character := ' ';
                              Fill_Cursor   : in     Cursor'Class);
    
-   -- Set_Background is emulated with Clear
+   overriding
+   procedure Wide_Set_Background
+     (The_Surface   : in out Frame;
+      Fill_Character: in     Wide_Graphic_Character := ' ';
+      Fill_Cursor   : in     Cursor'Class;
+      Wide_Fallback : access function (Item: Wide_Character) 
+                                      return Character := null);
    
+   overriding
+   procedure Set_Border (The_Surface: in out Frame;
+                         Use_Cursor : in     Cursor'Class);
+   -- Note that if Wide_Support is not enabled for the target surface,
+   -- this "default" border will use "poor man's box drawing" i.e:
+   --   +-----+
+   --   |     |
+   --   +-----+
+   --
+   -- Otherwise, the UNICODE box drawing code page will be used (U+2500-257F),
+   -- with the single-line border.
+   
+   
+   overriding
+   procedure Set_Border (The_Surface: in out Frame;
+                         Use_Cursor : in     Cursor'Class;
+                         
+                         Left_Side,
+                         Right_Side,
+                         Top_Side,
+                         Bottom_Side,
+                           
+                         Top_Left_Corner,
+                         Top_Right_Corner,
+                         Bottom_Left_Corner,
+                         Bottom_Right_Corner: in Graphic_Character);
+   
+   overriding
+   procedure Wide_Set_Border (The_Surface: in out Frame;
+                              Use_Cursor : in     Cursor'Class;
+                              
+                              Left_Side,
+                              Right_Side,
+                              Top_Side,
+                              Bottom_Side,
+                                
+                              Top_Left_Corner,
+                              Top_Right_Corner,
+                              Bottom_Left_Corner,
+                              Bottom_Right_Corner: in Wide_Graphic_Character;
+                        
+                              Wide_Fallback: access 
+                                function (Item: Wide_Character) 
+                                         return Character := null);
    
    overriding
    procedure Transcribe (Source : in out Frame;
@@ -237,7 +293,6 @@ private
    -----------
    -- Frame --
    -----------
-   
    subtype Colored_Cursor_Container is 
      Terminals.Color.Colored_Cursor_Container;
 
@@ -254,11 +309,15 @@ private
       function  Background_Cursor return Cursor'Class;
       procedure Background_Cursor (Set: in Cursor'Class);
       
-      function  Background_Character return Character;
-      procedure Background_Character (Set: in Character);
+      function  Background_Character return Graphic_Character;
+      procedure Background_Character (Set: in Graphic_Character);
+      
+      function  Wide_Background_Character return Wide_Graphic_Character;
+      procedure Wide_Background_Character (Set: in Wide_Graphic_Character);
       -- Background is configured through Set_Background, and is used
       -- for all Clear operations. Cursor defaults to the parent Surface's 
       -- Current_Cursor during initialization. Character defaults to Space.
+      
       
       function  Target_TL return Cursor_Position;
       procedure Target_TL (Set: in Cursor_Position);
@@ -274,7 +333,8 @@ private
       Our_Cursor   : Colored_Cursor_Container;
       
       BG_Cursor    : Colored_Cursor_Container;
-      BG_Char      : Character := ' ';
+      BG_Char      : Graphic_Character      := ' ';
+      Wide_BG_Char : Wide_Graphic_Character := ' ';
       
       TL_Pos       : Cursor_Position;
       
@@ -290,6 +350,9 @@ private
    --
    -- function expression implementations
    --
+   
+   overriding function Wide_Support (The_Surface: Frame) return Boolean
+     is (The_Surface.Target.Wide_Support);
    
    overriding function Available (The_Surface: Frame) return Boolean
      is (The_Surface.State.Available);

@@ -50,7 +50,6 @@ with Curses.Binding.Render;
 with Curses.Binding.Render.Wide;
 with Curses.Terminals.Color;
 
-
 package body Curses.Terminals.Surfaces is
    
    --
@@ -592,7 +591,6 @@ package body Curses.Terminals.Surfaces is
    end Generic_Put;
    
    
-   -- Standard String
    overriding
    procedure Put (The_Surface   : in out Terminal_Surface;
                   Set_Cursor    : in out Cursor'Class;

@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -126,12 +126,23 @@ package body Curses.Frames is
       --------------------------
       -- Background_Character --
       --------------------------
-      function  Background_Character return Character is (BG_Char);
+      function  Background_Character return Graphic_Character is (BG_Char);
       
-      procedure Background_Character (Set: in Character) is
+      procedure Background_Character (Set: in Graphic_Character) is
       begin
          BG_Char := Set;
       end Background_Character;
+      
+      -------------------------------
+      -- Wide_Background_Character --
+      -------------------------------
+      function  Wide_Background_Character return Wide_Graphic_Character 
+        is (Wide_BG_Char);
+      
+      procedure Wide_Background_Character (Set: in Wide_Graphic_Character) is
+      begin
+         Wide_BG_Char := Set;
+      end Wide_Background_Character;
       
       
       ---------------
@@ -210,6 +221,8 @@ package body Curses.Frames is
       T_Extents: Cursor_Position;
    begin
       if not The_Frame.Target.Available then
+         -- We check the target here because Reframe may reactivate an inactive
+         -- frame. We want to prevent reframing on inactive targets, however.
          raise Surface_Unavailable;
       end if;
       
@@ -266,6 +279,8 @@ package body Curses.Frames is
       T_Extents: Cursor_Position;
    begin
       if not The_Frame.Target.Available then
+         -- We check the target here because Reframe may reactivate an inactive
+         -- frame. We want to prevent reframing on inactive targets, however.
          raise Surface_Unavailable;
       end if;
       
@@ -273,7 +288,8 @@ package body Curses.Frames is
       
       The_Frame.Reframe 
         (Top_Left         => (Margin + 1, Margin + 1),
-          Proposed_Extents => T_Extents - Cursor_Position'(Margin, Margin));
+         Proposed_Extents => 
+           T_Extents - (Cursor_Position'(Margin * 2, Margin * 2)));
       
    exception
       when Surface_Unavailable =>
@@ -459,28 +475,48 @@ package body Curses.Frames is
    
    -- Clear Group Common Infrastructure --
    ---------------------------------------
-   procedure Clear_Block (The_Surface: in out Frame;
+   procedure Clear_Block (The_Surface: in out Frame'Class;
                           First_Row  : in     Cursor_Ordinal;
                           Last_Row   : in     Cursor_Ordinal)
      with Inline
    is
-      Extents : constant Cursor_Position := The_Surface.Extents;
-      Blanks  : constant String (1 .. Positive (Extents.Column))
-        := (others => The_Surface.State.Background_Character);
-      
+      Extents   : constant Cursor_Position := The_Surface.Extents;
       Use_Cursor: Cursor'Class := The_Surface.State.Background_Cursor;
 
    begin
       Use_Cursor.Position.Column := 1;
       
-      for I in First_Row .. Last_Row loop
-         Use_Cursor.Position.Row := I;
-         The_Surface.Put (Set_Cursor => Use_Cursor,
-                          Content    => Blanks);
-         -- Note that Put will do the actual Extents check for Row.
-         -- This means that if Last_Row is beyond Extents, then we will
-         -- still clear up to the last Row
-      end loop;
+      if The_Surface.Wide_Support then
+         declare
+            Blanks  : constant Wide_String (1 .. Positive (Extents.Column))
+              := (others => The_Surface.State.Wide_Background_Character);
+         begin
+            for I in First_Row .. Last_Row loop
+               Use_Cursor.Position.Row := I;
+               The_Surface.Wide_Put
+                 (Set_Cursor    => Use_Cursor,
+                  Content       => Blanks);
+               -- Note that Put will do the actual Extents check for Row.
+               -- This means that if Last_Row is beyond Extents, then we will
+               -- still clear up to the actual last Row
+            end loop;
+         end;
+         
+      else
+         declare
+            Blanks  : constant String (1 .. Positive (Extents.Column))
+              := (others => The_Surface.State.Background_Character);
+         begin
+            for I in First_Row .. Last_Row loop
+               Use_Cursor.Position.Row := I;
+               The_Surface.Put (Set_Cursor => Use_Cursor,
+                                Content    => Blanks);
+               -- Note that Put will do the actual Extents check for Row.
+               -- This means that if Last_Row is beyond Extents, then we will
+               -- still clear up to the actual last Row
+            end loop;
+         end;
+      end if;
    end Clear_Block;
    
    
@@ -608,18 +644,6 @@ package body Curses.Frames is
    ------------------
    -- Clear_To_End --
    ------------------
-   overriding
-   procedure Clear_To_End (The_Surface: in out Frame) is
-      C: Cursor'Class := The_Surface.Current_Cursor;
-   begin
-      The_Surface.Clear_To_End (From => C);
-      
-   exception
-      when others => null;
-   end Clear_To_End;
-   
-   
-   ----------------------------------------
    overriding 
    procedure Clear_To_End (The_Surface: in out Frame;
                            From       : in     Cursor'Class)
@@ -651,13 +675,30 @@ package body Curses.Frames is
    ---------
    -- Put --
    ---------
-   overriding 
-   procedure Put (The_Surface   : in out Frame;
-                  Set_Cursor    : in out Cursor'Class;
-                  Content       : in     String;
-                  Justify       : in     Justify_Mode    := Left;
-                  Overflow      : in     Overflow_Mode   := Truncate;
-                  Advance_Cursor: in     Boolean         := False)
+   generic
+      type Character_Type is (<>);
+      type String_Type    is array (Positive range <>) of Character_Type;
+   
+      with procedure Target_Put (The_Surface: in out Surface'Class;
+                                 Set_Cursor : in out Cursor'Class;
+                                 Content    : in     String_Type;
+                                 Justify    : in     Justify_Mode;
+                                 Overflow   : in     Overflow_Mode);
+      -- Should dispatch to Put with defaults as appropriate
+   
+   procedure Generic_Put (The_Surface   : in out Frame;
+                          Set_Cursor    : in out Cursor'Class;
+                          Content       : in     String_Type;
+                          Justify       : in     Justify_Mode;
+                          Overflow      : in     Overflow_Mode;
+                          Advance_Cursor: in     Boolean);
+   
+   procedure Generic_Put (The_Surface   : in out Frame;
+                          Set_Cursor    : in out Cursor'Class;
+                          Content       : in     String_Type;
+                          Justify       : in     Justify_Mode;
+                          Overflow      : in     Overflow_Mode;
+                          Advance_Cursor: in     Boolean)
    is
       Write_Position: Cursor_Position := Set_Cursor.Position;
       Write_Cursor  : Cursor'Class    := Set_Cursor;
@@ -669,7 +710,10 @@ package body Curses.Frames is
       -- this far.
       
       package Computer is new Put_Computer
-        (The_Surface => Surface'Class (The_Surface),
+        (Character_Type => Character_Type,
+         String_Type    => String_Type,
+         
+         The_Surface => Surface'Class (The_Surface),
          Write_Head  => Write_Position,
          Justify     => Justify,
          Overflow    => Overflow,
@@ -692,11 +736,11 @@ package body Curses.Frames is
       
       while Computer.Compute_Line loop
          Write_Cursor.Position := Write_Position + Offset - (1,1);
-         The_Surface.Target.Put 
-           (Set_Cursor => Write_Cursor,
-            Content    => Content (Select_First .. Select_Last),
-            Justify    => Justify,
-            Overflow   => Overflow);
+         Target_Put (The_Surface => The_Surface.Target.all,
+                     Set_Cursor  => Write_Cursor,
+                     Content     => Content (Select_First .. Select_Last),
+                     Justify     => Justify,
+                     Overflow    => Overflow);
       end loop;
       
       if Advance_Cursor then
@@ -722,34 +766,113 @@ package body Curses.Frames is
          
          raise Curses_Library with
            "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Generic_Put;
+   ----------------------------------------
+   
+   overriding 
+   procedure Put (The_Surface   : in out Frame;
+                  Set_Cursor    : in out Cursor'Class;
+                  Content       : in     String;
+                  Justify       : in     Justify_Mode    := Left;
+                  Overflow      : in     Overflow_Mode   := Truncate;
+                  Advance_Cursor: in     Boolean         := False)
+   is
+      procedure Target_Put (The_Surface: in out Surface'Class;
+                            Set_Cursor : in out Cursor'Class;
+                            Content    : in     String;
+                            Justify    : in     Justify_Mode;
+                            Overflow   : in     Overflow_Mode)
+      with Inline is
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- This has already been checked
+      begin
+         The_Surface.Put (Set_Cursor => Set_Cursor,
+                          Content    => Content,
+                          Justify    => Justify,
+                          Overflow   => Overflow);
+      end Target_Put;
+      
+      procedure Put_Actual is new Generic_Put
+        (Character_Type => Character,
+         String_Type    => String,
+         Target_Put     => Target_Put)
+        with Inline;
+   begin
+      Put_Actual (The_Surface    => The_Surface,
+                  Set_Cursor     => Set_Cursor,
+                  Content        => Content,
+                  Justify        => Justify,
+                  Overflow       => Overflow,
+                  Advance_Cursor => Advance_Cursor);
    end Put;
+   
+   
+   --------------
+   -- Wide_Put --
+   --------------
+   overriding
+   procedure Wide_Put
+     (The_Surface   : in out Frame;
+      Set_Cursor    : in out Cursor'Class;
+      Content       : in     Wide_String;
+      Justify       : in     Justify_Mode          := Left;
+      Overflow      : in     Overflow_Mode         := Truncate;
+      Advance_Cursor: in     Boolean               := False;
+      Wide_Fallback : access 
+        function (Item: Wide_String) return String := null)
+   is
+      procedure Target_Put (The_Surface: in out Surface'Class;
+                            Set_Cursor : in out Cursor'Class;
+                            Content    : in     Wide_String;
+                            Justify    : in     Justify_Mode;
+                            Overflow   : in     Overflow_Mode)
+      with Inline is
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- This has already been checked
+      begin
+         The_Surface.Wide_Put (Set_Cursor    => Set_Cursor,
+                               Content       => Content,
+                               Justify       => Justify,
+                               Overflow      => Overflow,
+                               Wide_Fallback => Wide_Fallback);
+      end Target_Put;
+      
+      procedure Put_Actual is new Generic_Put
+        (Character_Type => Wide_Character,
+         String_Type    => Wide_String,
+         Target_Put     => Target_Put)
+        with Inline;
+   begin
+      Put_Actual (The_Surface    => The_Surface,
+                  Set_Cursor     => Set_Cursor,
+                  Content        => Content,
+                  Justify        => Justify,
+                  Overflow       => Overflow,
+                  Advance_Cursor => Advance_Cursor);
+   end Wide_Put;
    
    
    ----------
    -- Fill --
    ----------
-   overriding
-   procedure Fill (The_Surface: in out Frame;
-                   Pattern    : in     String)
-   is
-   begin
-      The_Surface.Fill (Pattern     => Pattern,
-                        Fill_Cursor => The_Surface.Current_Cursor);
-      
-   exception
-      when Assertion_Error | Surface_Unavailable | Curses_Library =>
-         raise;
-         
-      when e: others =>
-         raise Curses_Library with
-           "Unexpected exception: " & Exceptions.Exception_Information (e);
-   end Fill;
+   generic
+      type Character_Type is (<>);
+      type String_Type    is array (Positive range <>) of Character_Type;
    
-   ----------------------------------------
-   overriding
-   procedure Fill (The_Surface: in out Frame;
-                   Pattern    : in     String;
-                   Fill_Cursor: in     Cursor'Class)
+      with procedure Dispatch_Put (The_Surface: in out Frame'Class;
+                                   Set_Cursor : in out Cursor'Class;
+                                   Content    : in     String_Type);
+      -- Should dispatch to the appropriate Fill operation with the following
+      -- configuration:
+      -- Overflow => Wrap_Truncate
+   
+   procedure Generic_Fill (The_Surface: in out Frame'Class;
+                           Pattern    : in     String_Type;
+                           Fill_Cursor: in     Cursor'Class);
+   
+   procedure Generic_Fill (The_Surface: in out Frame'Class;
+                           Pattern    : in     String_Type;
+                           Fill_Cursor: in     Cursor'Class)
    is
       Extents: constant Cursor_Position := The_Surface.Extents;
    begin
@@ -759,9 +882,12 @@ package body Curses.Frames is
       
       declare
          Use_Cursor: Cursor'Class := Fill_Cursor;
-         Expanded_Pattern: String 
+         Expanded_Pattern: String_Type 
            (1 .. Positive (Extents.Row * Extents.Column));
       begin
+         -- Home the cursor
+         Use_Cursor.Position := (1,1);
+         
          -- If Pattern is larger than the available area, then we truncate
          -- to fit, otherwise, we need to fill it out
          if Pattern'Length > Expanded_Pattern'Length then
@@ -796,6 +922,11 @@ package body Curses.Frames is
             end;
             
          end if;
+         
+         Dispatch_Put (The_Surface => The_Surface,
+                       Set_Cursor  => Use_Cursor,
+                       Content     => Expanded_Pattern);
+         
       end;
       
    exception
@@ -805,7 +936,69 @@ package body Curses.Frames is
       when e: others =>
          raise Curses_Library with
            "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Generic_Fill;
+   ----------------------------------------
+   
+   overriding
+   procedure Fill (The_Surface: in out Frame;
+                   Pattern    : in     String;
+                   Fill_Cursor: in     Cursor'Class)
+   is
+      procedure Dispatch_Put (The_Surface: in out Frame'Class;
+                              Set_Cursor : in out Cursor'Class;
+                              Content    : in     String)
+      with Inline is
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- This has already been checked
+      begin
+         The_Surface.Put (Set_Cursor => Set_Cursor,
+                          Content    => Content,
+                          Overflow   => Wrap_Truncate);
+      end Dispatch_Put;
+      
+      procedure Put_Actual is new Generic_Fill
+        (Character_Type => Character,
+         String_Type    => String,
+         Dispatch_Put   => Dispatch_Put);
+   begin
+      Put_Actual (The_Surface => The_Surface,
+                  Pattern     => Pattern,
+                  Fill_Cursor => Fill_Cursor);
    end Fill;
+   
+   
+   ---------------
+   -- Wide_Fill --
+   ---------------
+   overriding
+   procedure Wide_Fill (The_Surface  : in out Frame;
+                        Pattern      : in     Wide_String;
+                        Fill_Cursor  : in     Cursor'Class;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null)
+   is
+      procedure Dispatch_Put (The_Surface: in out Frame'Class;
+                              Set_Cursor : in out Cursor'Class;
+                              Content    : in     Wide_String)
+      with Inline is
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- This has already been checked
+      begin
+         The_Surface.Wide_Put (Set_Cursor    => Set_Cursor,
+                               Content       => Content,
+                               Overflow      => Wrap_Truncate,
+                               Wide_Fallback => Wide_Fallback);
+      end Dispatch_Put;
+      
+      procedure Fill_Actual is new Generic_Fill
+        (Character_Type => Wide_Character,
+         String_Type    => Wide_String,
+         Dispatch_Put   => Dispatch_Put);
+   begin
+      Fill_Actual (The_Surface => The_Surface,
+                   Pattern     => Pattern,
+                   Fill_Cursor => Fill_Cursor);
+   end Wide_Fill;
    
    
    --------------------
@@ -813,31 +1006,7 @@ package body Curses.Frames is
    --------------------
    overriding
    procedure Set_Background (The_Surface   : in out Frame;
-                             Fill_Character: in     Character := ' ')
-   is
-      pragma Assertion_Policy (Pre'Class => Ignore);
-      -- We cleared this on entry to this subprogram
-      
-      Use_Cursor: Cursor'Class := The_Surface.Current_Cursor;
-   begin
-      The_Surface.Set_Background (Fill_Character => Fill_Character,
-                                  Fill_Cursor    => Use_Cursor);
-      
-   exception
-      when Surface_Unavailable | Curses_Library =>
-         raise;
-         
-      when e: others =>
-         raise Curses_Library with
-           "Unexpected exception: " & Exceptions.Exception_Information (e);
-      
-   end Set_Background;
-   
-   
-   ----------------------------------------
-   overriding
-   procedure Set_Background (The_Surface   : in out Frame;
-                             Fill_Character: in     Character := ' ';
+                             Fill_Character: in     Graphic_Character := ' ';
                              Fill_Cursor   : in     Cursor'Class)
    is
    begin
@@ -860,6 +1029,380 @@ package body Curses.Frames is
            "Unexpected exception: " & Exceptions.Exception_Information (e);
       
    end Set_Background;
+   
+   
+   -------------------------
+   -- Wide_Set_Background --
+   -------------------------
+   overriding
+   procedure Wide_Set_Background
+     (The_Surface   : in out Frame;
+      Fill_Character: in     Wide_Graphic_Character := ' ';
+      Fill_Cursor   : in     Cursor'Class;
+      Wide_Fallback : access function (Item: Wide_Character) 
+                                      return Character := null)
+   is
+   begin
+      if not The_Surface.Available then
+         raise Surface_Unavailable;
+      end if;
+      
+      -- Set the background information and then dispatch to Clear
+      The_Surface.State.Background_Cursor (Fill_Cursor);
+      
+      if The_Surface.Wide_Support then
+         The_Surface.State.Wide_Background_Character (Fill_Character);
+         
+      else
+         if Wide_Fallback = null then
+            raise Curses_Library with
+              "Wide support not enabled for the target surface";
+         else
+            The_Surface.State.Background_Character 
+              (Wide_Fallback (Fill_Character));
+         end if;
+      end if;
+      
+      The_Surface.Clear;
+      
+   exception
+      when Assertion_Error | Surface_Unavailable | Curses_Library =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+      
+   end Wide_Set_Background;
+   
+   
+   ----------------
+   -- Set_Border --
+   ----------------
+   overriding
+   procedure Set_Border (The_Surface: in out Frame;
+                         Use_Cursor : in     Cursor'Class)
+   is
+      Vertical_Line  : constant Graphic_Character := '|';
+      Horizontal_Line: constant Graphic_Character := '-';
+      Corner         : constant Graphic_Character := '+';
+      
+      W_Vertical_Line  : constant Wide_Graphic_Character := '|';
+      W_Horizontal_Line: constant Wide_Graphic_Character := '-';
+      W_Corner         : constant Wide_Graphic_Character := '+';
+      
+      -- See Unicode U2500 codepage (Box Drawing)
+      Wide_Vertical_Line: constant Wide_Graphic_Character
+        := Wide_Graphic_Character'Val (16#2502#);
+      Wide_Horizontal_Line: constant Wide_Graphic_Character
+        := Wide_Graphic_Character'Val (16#2500#);
+      
+      Wide_Top_Left: constant Wide_Graphic_Character
+        := Wide_Graphic_Character'Val (16#250C#);
+      Wide_Top_Right: constant Wide_Graphic_Character
+        := Wide_Graphic_Character'Val (16#2510#);
+      Wide_Bottom_Left: constant Wide_Graphic_Character
+        := Wide_Graphic_Character'Val (16#2514#);
+      Wide_Bottom_Right: constant Wide_Graphic_Character
+        := Wide_Graphic_Character'Val (16#2518#);
+      
+   begin
+      
+      if The_Surface.Wide_Support then
+         The_Surface.Wide_Set_Border
+           (Use_Cursor => Use_Cursor,
+            
+            Left_Side           => Wide_Vertical_Line,
+            Right_Side          => Wide_Vertical_Line,
+            Top_Side            => Wide_Horizontal_Line,
+            Bottom_Side         => Wide_Horizontal_Line,
+            
+            Top_Left_Corner     => Wide_Top_Left,
+            Top_Right_Corner    => Wide_Top_Right,
+            Bottom_Left_Corner  => Wide_Bottom_Left,
+            Bottom_Right_Corner => Wide_Bottom_Right);
+         
+      else
+         The_Surface.Set_Border
+           (Use_Cursor          => Use_Cursor,
+                                 
+            Left_Side           => Vertical_Line,
+            Right_Side          => Vertical_Line,
+            Top_Side            => Horizontal_Line,
+            Bottom_Side         => Horizontal_Line,
+            
+            Top_Left_Corner     => Corner,
+            Top_Right_Corner    => Corner,
+            Bottom_Left_Corner  => Corner,
+            Bottom_Right_Corner => Corner);
+      end if;
+      
+   end Set_Border;
+   ----------------------------------------
+   
+   generic
+      type Character_Type is (<>);
+      type String_Type    is array (Positive range <>) of Character_Type;
+   
+      with procedure Dispatch_Put (The_Surface: in out Frame'Class;
+                                   Set_Cursor : in out Cursor'Class;
+                                   Content    : in     String_Type);
+   
+   procedure Generic_Set_Border (The_Surface: in out Frame'Class;
+                                 Use_Cursor : in     Cursor'Class;
+                                
+                                 Left_Side,
+                                 Right_Side,
+                                 Top_Side,
+                                 Bottom_Side,
+                                    
+                                 Top_Left_Corner,
+                                 Top_Right_Corner,
+                                 Bottom_Left_Corner,
+                                 Bottom_Right_Corner: in Character_Type);
+   
+   procedure Generic_Set_Border (The_Surface: in out Frame'Class;
+                                 Use_Cursor : in     Cursor'Class;
+                                 
+                                 Left_Side,
+                                   Right_Side,
+                                   Top_Side,
+                                   Bottom_Side,
+                                   
+                                   Top_Left_Corner,
+                                   Top_Right_Corner,
+                                   Bottom_Left_Corner,
+                                   Bottom_Right_Corner: in Character_Type)
+   is
+      Extents: constant Cursor_Position := The_Surface.Extents;
+      
+      Set_Cursor: Cursor'Class := Use_Cursor;
+      
+   begin
+      if not The_Surface.Available then
+         raise Surface_Unavailable;
+      end if;
+      
+      -- Corners take priority. If the surface is not large enough for the most
+      -- minimal frame (at least one left, right, top, bottom side), it shall
+      -- be populated instead with as many corner characters as possible,
+      -- starting with the top-left corner.
+      
+      -- Top-left
+      Set_Cursor.Position := (1,1);
+      Dispatch_Put (The_Surface => The_Surface,
+                    Set_Cursor  => Set_Cursor,
+                    Content     => String_Type'(1 .. 1 => Top_Left_Corner));
+      
+      -- Top-right
+      if Extents.Column > 1 then
+         Set_Cursor.Position := (Row => 1, Column => Extents.Column);
+         Dispatch_Put (The_Surface => The_Surface,
+                       Set_Cursor  => Set_Cursor,
+                       Content     => String_Type'(1 ..1 => Top_Right_Corner));
+         
+         -- Bottom-right
+         if Extents.Row > 1 then
+            Set_Cursor.Position := Extents;
+            Dispatch_Put
+              (The_Surface => The_Surface,
+               Set_Cursor  => Set_Cursor,
+               Content     => String_Type'(1 .. 1 => Bottom_Right_Corner));
+         end if;
+      end if;
+      
+      -- Bottom-left
+      if Extents.Row > 1 then
+         Set_Cursor.Position := (Row    => Extents.Row,
+                                 Column => 1);
+         Dispatch_Put
+           (The_Surface => The_Surface,
+            Set_Cursor  => Set_Cursor,
+            Content     => String_Type'(1 .. 1 => Bottom_Left_Corner));
+      end if;
+      
+      -- Now we can handle the sides, if there is room
+      
+      -- Horizontal sides
+      if Extents.Column > 2 then
+         declare
+            Horizontal_Side: String_Type (1 .. Positive (Extents.Column - 2))
+              := (others => Top_Side);
+         begin
+            Set_Cursor.Position := (Row => 1, Column => 2);
+            Dispatch_Put (The_Surface => The_Surface,
+                          Set_Cursor  => Set_Cursor,
+                          Content     => Horizontal_Side);
+            
+            if Extents.Row > 1 then
+               Horizontal_Side     := (others => Bottom_Side);
+               Set_Cursor.Position := (Row => Extents.Row, Column => 2);
+               Dispatch_Put (The_Surface => The_Surface,
+                             Set_Cursor  => Set_Cursor,
+                             Content     => Horizontal_Side);
+            end if;
+         end;
+      end if;
+      
+      -- Vertical sides
+      if Extents.Row > 2 then
+         -- Left
+         Set_Cursor.Position.Column := 1;
+         for R in 2 .. Extents.Row - 1 loop
+            Set_Cursor.Position.Row := R;
+            Dispatch_Put (The_Surface => The_Surface,
+                          Set_Cursor  => Set_Cursor,
+                          Content     => String_Type'(1 .. 1 => Left_Side)); 
+         end loop;
+         
+         -- Right
+         if Extents.Column > 1 then
+            Set_Cursor.Position.Column := Extents.Column;
+            for R in 2 .. Extents.Row - 1 loop
+               Set_Cursor.Position.Row := R;
+               Dispatch_Put
+                 (The_Surface => The_Surface,
+                  Set_Cursor  => Set_Cursor,
+                  Content     => String_Type'(1 .. 1 => Right_Side));
+            end loop;
+         end if;
+      end if;
+      
+   exception
+      when Assertion_Error | Surface_Unavailable | Curses_Library =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with "Unexpected exception: "
+           & Exceptions.Exception_Information (e);
+   end Generic_Set_Border;
+                                    
+   
+   ----------------------------------------
+   
+   overriding
+   procedure Set_Border (The_Surface: in out Frame;
+                         Use_Cursor : in     Cursor'Class;
+                         
+                         Left_Side,
+                         Right_Side,
+                         Top_Side,
+                         Bottom_Side,
+                           
+                         Top_Left_Corner,
+                         Top_Right_Corner,
+                         Bottom_Left_Corner,
+                         Bottom_Right_Corner: in Graphic_Character)
+   is
+      procedure Target_Put (The_Surface: in out Frame'Class;
+                            Set_Cursor : in out Cursor'Class;
+                            Content    : in     String)
+      with Inline is
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- Already checked for Put
+      begin
+         The_Surface.Put (Set_Cursor => Set_Cursor,
+                          Content    => Content);
+      end Target_Put;
+      
+      procedure Set_Border_Actual is new Generic_Set_Border
+        (Character_Type => Character,
+         String_Type    => String,
+         Dispatch_Put   => Target_Put);
+      
+   begin
+      Set_Border_Actual (The_Surface         => The_Surface,
+                         Use_Cursor          => Use_Cursor,
+                         
+                         Left_Side           => Left_Side,
+                         Right_Side          => Right_Side,
+                         Top_Side            => Top_Side,
+                         Bottom_Side         => Bottom_Side,
+                         
+                         Top_Left_Corner     => Top_Left_Corner,
+                         Top_Right_Corner    => Top_Right_Corner,
+                         Bottom_Left_Corner  => Bottom_Left_Corner,
+                         Bottom_Right_Corner => Bottom_Right_Corner);
+
+         
+   end Set_Border;
+   
+   
+   ---------------------
+   -- Wide_Set_Border --
+   ---------------------
+   overriding
+   procedure Wide_Set_Border (The_Surface: in out Frame;
+                              Use_Cursor : in     Cursor'Class;
+                              
+                              Left_Side,
+                                Right_Side,
+                                Top_Side,
+                                Bottom_Side,
+                                
+                                Top_Left_Corner,
+                                Top_Right_Corner,
+                                Bottom_Left_Corner,
+                                Bottom_Right_Corner: in Wide_Graphic_Character;
+                              
+                              Wide_Fallback: access 
+                                function (Item: Wide_Character) 
+                                         return Character := null)
+   is
+      procedure Target_Put (The_Surface: in out Frame'Class;
+                            Set_Cursor : in out Cursor'Class;
+                            Content    : in     Wide_String)
+      with Inline is
+         pragma Assertion_Policy (Pre'Class => Ignore);
+         -- Already checked for Put
+      begin
+         The_Surface.Wide_Put (Set_Cursor    => Set_Cursor,
+                               Content       => Content);
+      end Target_Put;
+      
+      procedure Set_Border_Actual is new Generic_Set_Border
+        (Character_Type => Wide_Character,
+         String_Type    => Wide_String,
+         Dispatch_Put   => Target_Put);
+      
+   begin
+      
+      if The_Surface.Wide_Support then
+         Set_Border_Actual (The_Surface         => The_Surface,
+                            Use_Cursor          => Use_Cursor,
+                            
+                            Left_Side           => Left_Side,
+                            Right_Side          => Right_Side,
+                            Top_Side            => Top_Side,
+                            Bottom_Side         => Bottom_Side,
+                            
+                            Top_Left_Corner     => Top_Left_Corner,
+                            Top_Right_Corner    => Top_Right_Corner,
+                            Bottom_Left_Corner  => Bottom_Left_Corner,
+                            Bottom_Right_Corner => Bottom_Right_Corner);
+         
+      else
+         -- No wide support
+         -- Unfortunately, we can't just delegate this to Wide_Put via
+         -- Target_Put since that expects a function returning a String, and
+         -- we have one that returns a Character. We could "roll our own" and
+         -- pass that in, but it seems too indirect.
+         
+         The_Surface.Set_Border
+           (Use_Cursor          => Use_Cursor,
+                                 
+            Left_Side           => Wide_Fallback (Left_Side),
+            Right_Side          => Wide_Fallback (Right_Side),
+            Top_Side            => Wide_Fallback (Top_Side),
+            Bottom_Side         => Wide_Fallback (Bottom_Side),
+            
+            Top_Left_Corner     => Wide_Fallback (Top_Left_Corner),
+            Top_Right_Corner    => Wide_Fallback (Top_Right_Corner),
+            Bottom_Left_Corner  => Wide_Fallback (Bottom_Left_Corner),
+            Bottom_Right_Corner => Wide_Fallback (Bottom_Right_Corner));
+      end if;
+         
+   end Wide_Set_Border;
    
    
    ----------------

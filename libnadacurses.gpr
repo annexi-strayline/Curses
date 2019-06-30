@@ -1,0 +1,75 @@
+library project libnadacurses is
+
+   Version := "1";
+
+   OS_Def     := "-D__NADACURSES_HOST_OS_";
+   Distro_Def := "";
+   Wide_Def   := "";
+
+   Source_Base := "./src";
+
+   type Config_Option  is ("YES", "NO");
+   type OS_Type        is ("Linux", "FreeBSD", "Solaris");
+   type Linux_Distro   is ("Ubuntu");
+   
+   Wide_Support: Config_Option := external ("WIDE_SUPPORT","NO");
+   Host_OS     : OS_Type       := external ("HOST_OS");
+   Distro      : Linux_Distro  := external ("DISTRO","Ubuntu");
+   
+
+
+   for Languages  use ("Ada", "C");
+   for Object_Dir use "./obj";
+
+   
+
+   case Host_OS is
+      when "Linux" =>
+         OS_Def := OS_Def & "LINUX";
+
+         Distro_Def := "-D__NADACURSES_DISTRO_";
+
+         case Distro is
+            when "Ubuntu" =>
+                Distro_Def := Distro_Def & "UBUNTU";
+         end case;
+
+      when "FreeBSD" =>
+         OS_Def := OS_Def & "FREE_BSD";
+
+      when "Solaris" =>
+         OS_Def := OS_Def & "SOLARIS";
+   end case;
+
+   case Wide_Support is
+      when "YES" =>
+         for Source_Dirs use (Source_Base, Source_Base & "/Wide_Support");
+         Wide_Def := "-D__NADACURSES_WIDE_SUPPORT";
+      when "NO" =>
+         for Source_Dirs use (Source_Base, Source_Base & "/No_Wide_Support");
+   end case;
+
+   -- Under construction
+   for Excluded_Source_Files use
+      ("curses-managed.ads",
+       "curses-managed.adb",
+       "curses-ui-home_screen.ads");
+   
+   for Library_Name    use "nadacurses";
+   for Library_Dir     use "./lib";
+   for Library_Kind    use "dynamic";
+   for Library_Version use "libnadacurses.so." & Version;
+
+   case Wide_Support is
+      when "YES" =>
+         for Library_Options use ("-lncursesw");
+      when "NO"  =>
+         for Library_Options use ("-lncurses");
+   end case;
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-O2");
+      for Default_Switches ("C") use ("-O2", OS_Def, Distro_Def, Wide_Def);
+   end Compiler;
+
+end libnadacurses;

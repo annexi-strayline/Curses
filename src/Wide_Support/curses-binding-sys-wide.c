@@ -43,7 +43,320 @@
 
 /* Wide_Character support binding facilities */
 
-#include <curses.h>
+#define _XOPEN_SOURCE_EXTENDED
+
+#ifdef __NADACURSES_HOST_OS_LINUX
+#include <ncursesw/ncurses.h>
+
+#elif defined (__NADACURSES_HOST_OS_FREE_BSD)
+#include <ncurses.h>
+
+#elif defined (__NADACURSES_HOST_OS_SOLARIS)
+#include <ncurses/ncurses.h>
+
+#else
+#error "OS not supported."
+#endif
+
+#define BOOL_FALSE 0
+#define BOOL_TRUE  1
+
+/**************/
+/** Internal **/
+/**************/
+static inline attr_t internal_set_wattrs
+(unsigned   bold,
+ unsigned   standout,
+ unsigned   dim,
+ unsigned   uline,
+ unsigned   invert,
+ unsigned   blink)
+{
+     attr_t attrs = 0;
+     
+     if ( bold )
+          attrs |= A_BOLD;
+
+     if ( standout )
+          attrs |= A_STANDOUT;
+
+     if ( dim )
+          attrs |= A_DIM;
+
+     if ( uline )
+          attrs |= A_UNDERLINE;
+
+     if ( invert )
+          attrs |= A_REVERSE;
+
+     if ( blink )
+          attrs |= A_BLINK;
+
+     return attrs;
+}
 
 
 
+
+
+/* function CURSES_waddwstr (win: Surface_Handle; str: wchar_array) */
+/*    return int                                                    */
+/*                                                                  */
+/*   with                                                           */
+/*   Import        => True,                                         */
+/*   Convention    => C,                                            */
+/*   External_Name => "__binding_curses_waddwstr";                  */
+
+int __binding_curses_waddwstr ( WINDOW * win, const wchar_t * str )
+{
+     int retval;
+
+     retval = waddwstr ( win, str );
+     
+     return ( (retval == ERR) ? -1 : 0 );
+}
+
+
+/* function CURSES_winnwstr (win: in     Surface_Handle; */
+/*                           str: in out wchar_array;    */
+/*                           len: in     int)            */
+/*                         return int                    */
+/*   with                                                */
+/*   Import        => True,                              */
+/*   Convention    => C,                                 */
+/*   External_Name => "__binding_curses_winnwstr";       */
+
+int __binding_curses_winnwstr ( WINDOW * win, wchar_t * str, int len )
+{
+     return ( winnwstr ( win, str, len ) );
+}
+
+
+/* function CURSES_meta_wbkgrnd (win   : in Surface_Handle;          */
+/*                               blank : in wchar_t;                 */
+/*                               bold, standout, dim, uline, invert, */
+/*                               blink : in unsigned;                */
+/*                              return bool                          */
+/*   with                                                            */
+/*   Import        => True,                                          */
+/*   Convention    => C,                                             */
+/*   External_Name => "__binding_curses_meta_wbkgrnd";               */
+
+bool __binding_curses_meta_wbkgrnd
+(
+     WINDOW * win, wchar_t blank, unsigned bold, unsigned standout,
+     unsigned dim, unsigned uline, unsigned invert, unsigned blink
+)
+{
+     int retval;
+     const wchar_t blank_str[2] = { blank, L'\0' };
+
+     cchar_t set_char;
+
+     (void)setcchar (&set_char,           /* cchar_t       * wcval    */
+                     blank_str,           /* const wchar_t * wch      */
+                     internal_set_wattrs  /* const attr_t  attrs      */
+                     ( bold, standout, dim, uline, invert, blink ),
+                     0,                   /* short         color_pair */
+                     NULL);               /* void          * opts     */
+
+     retval = wbkgrnd ( win, &set_char );
+
+     if (retval == ERR)
+          return BOOL_FALSE;
+     else
+          return BOOL_TRUE;
+     
+}
+
+
+/* function CURSES_meta_wbkgrnd_color (win  : in Surface_Handle;           */
+/*                                     blank: in wchar_t;                  */
+/*                                     bold, standout, dim, uline, invert, */
+/*                                     blink: in unsigned;                 */
+/*                                     pair : in short)                    */
+/*                                    return bool                          */
+/*   with                                                                  */
+/*   Import        => True,                                                */
+/*   Convention    => C,                                                   */
+/*   External_Name => "__binding_curses_meta_wbkgrnd_color";               */
+/* -- Returns Bool_False on failure                                        */
+
+bool __binding_curses_meta_wbkgrnd_color
+(
+     WINDOW * win, wchar_t blank, unsigned bold, unsigned standout,
+     unsigned dim, unsigned uline, unsigned invert, unsigned blink,
+     short pair
+)
+{
+     int retval;
+     const wchar_t blank_str[2] = { blank, L'\0' };
+
+     cchar_t set_char;
+
+     (void)setcchar (&set_char,           /* cchar_t       * wcval    */
+                     blank_str,           /* const wchar_t * wch      */
+                     internal_set_wattrs  /* const attr_t  attrs      */
+                     ( bold, standout, dim, uline, invert, blink ),
+                     pair,                /* short         color_pair */
+                     NULL);               /* void          * opts     */
+                        
+     
+     retval = wbkgrnd ( win, &set_char );
+
+     if (retval == ERR)
+          return BOOL_FALSE;
+     else
+          return BOOL_TRUE;
+     
+}
+
+
+/* function CURSES_meta_wborder_set                        */
+/*   (win: in Surface_Handle;                              */
+/*    bold, standout, dim, uline, invert,                  */
+/*    blink: in unsigned;                                  */
+/*    ls, rs, ts, bs, tl, tr, bl, br: in wchar_t)          */
+/*   return bool                                           */
+/*                                                         */   
+/*   with                                                  */
+/*   Import        => True,                                */
+/*   Convention    => C,                                   */
+/*   External_Name => "__binding_curses_meta_wborder_set"; */
+
+bool __binding_curses_meta_wborder_set
+(
+     WINDOW * win,
+     
+     unsigned bold, unsigned standout, unsigned dim, unsigned uline,
+     unsigned invert, unsigned blink,
+
+     wchar_t ls, wchar_t rs, wchar_t ts, wchar_t bs,
+     wchar_t tl, wchar_t tr, wchar_t bl, wchar_t br
+)
+{
+     int retval;
+     
+     cchar_t ls_cchar, rs_cchar, ts_cchar, bs_cchar;
+     cchar_t tl_cchar, tr_cchar, bl_cchar, br_cchar;
+
+     wchar_t wstr[2] = { ls, L'\0' };
+     
+     attr_t attrs = internal_set_wattrs
+          ( bold, standout, dim, uline, invert, blink );
+
+     
+     setcchar ( &ls_cchar, wstr, attrs, 0, NULL );
+
+     wstr[0] = rs;
+     setcchar ( &rs_cchar, wstr, attrs, 0, NULL );
+
+     wstr[0] = ts;
+     setcchar ( &ts_cchar, wstr, attrs, 0, NULL );
+
+     wstr[0] = bs;
+     setcchar ( &bs_cchar, wstr, attrs, 0, NULL );
+     
+
+     wstr[0] = tl;
+     setcchar ( &tl_cchar, wstr, attrs, 0, NULL );
+
+     wstr[0] = tr;
+     setcchar ( &tr_cchar, wstr, attrs, 0, NULL );
+
+     wstr[0] = bl;
+     setcchar ( &bl_cchar, wstr, attrs, 0, NULL );
+
+     wstr[0] = br;
+     setcchar ( &br_cchar, wstr, attrs, 0, NULL );
+
+     
+     retval = wborder_set
+          ( win,
+            &ls_cchar, &rs_cchar, &ts_cchar, &bs_cchar,
+            &tl_cchar, &tr_cchar, &bl_cchar, &br_cchar );
+
+
+     if ( retval == OK )
+          return BOOL_TRUE;
+     else
+          return BOOL_FALSE;
+                
+}
+
+
+/* function CURSES_meta_wborder_set_color                          */
+/*   (win  : in Surface_Handle;                                    */
+/*    bold, standout, dim, uline, invert,                          */
+/*    blink: in unsigned;                                          */
+/*    pair : in short;                                             */
+/*    ls, rs, ts, bs, tl, tr, bl,                                  */
+/*    br   : in wchar_t)                                           */
+/*   return bool                                                   */
+/*                                                                 */   
+/*   with                                                          */
+/*   Import        => True,                                        */
+/*   Convention    => C,                                           */
+/*   External_Name => "__binding_curses_meta_wborder_set_color";   */
+
+bool __binding_curses_meta_wborder_set_color
+(
+     WINDOW * win,
+     
+     unsigned bold, unsigned standout, unsigned dim, unsigned uline,
+     unsigned invert, unsigned blink,
+
+     short pair,
+
+     wchar_t ls, wchar_t rs, wchar_t ts, wchar_t bs,
+     wchar_t tl, wchar_t tr, wchar_t bl, wchar_t br
+)
+{
+     int retval;
+     
+     cchar_t ls_cchar, rs_cchar, ts_cchar, bs_cchar;
+     cchar_t tl_cchar, tr_cchar, bl_cchar, br_cchar;
+
+     wchar_t wstr[2] = { ls, L'\0' };
+     
+     attr_t attrs = internal_set_wattrs
+          ( bold, standout, dim, uline, invert, blink );
+
+     
+     setcchar ( &ls_cchar, wstr, attrs, pair, NULL );
+
+     wstr[0] = rs;
+     setcchar ( &rs_cchar, wstr, attrs, pair, NULL );
+
+     wstr[0] = ts;
+     setcchar ( &ts_cchar, wstr, attrs, pair, NULL );
+
+     wstr[0] = bs;
+     setcchar ( &bs_cchar, wstr, attrs, pair, NULL );
+     
+
+     wstr[0] = tl;
+     setcchar ( &tl_cchar, wstr, attrs, pair, NULL );
+
+     wstr[0] = tr;
+     setcchar ( &tr_cchar, wstr, attrs, pair, NULL );
+
+     wstr[0] = bl;
+     setcchar ( &bl_cchar, wstr, attrs, pair, NULL );
+
+     wstr[0] = br;
+     setcchar ( &br_cchar, wstr, attrs, pair, NULL );
+
+     
+     retval = wborder_set
+          ( win,
+            &ls_cchar, &rs_cchar, &ts_cchar, &bs_cchar,
+            &tl_cchar, &tr_cchar, &bl_cchar, &br_cchar );
+
+
+     if ( retval == OK )
+          return BOOL_TRUE;
+     else
+          return BOOL_FALSE;
+                
+}

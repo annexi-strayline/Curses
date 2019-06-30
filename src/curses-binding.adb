@@ -71,8 +71,6 @@ package body Curses.Binding is
 
    -- General Binding --
    ---------------------
-   pragma Linker_Options ("curses-binding-sys.o");
-   pragma Linker_Options ("-lcurses");
    -- Since the curses library makes extensive use of C preprocessor macros, we
    -- cannot directly import many of the routines, and as such have put some
    -- subroutines into a C language thin binding
@@ -302,6 +300,19 @@ package body Curses.Binding is
          return False;
       
    end Select_Terminal;
-     
+   
+   
+begin
+   
+   -- ncurses library initialization hook
+   declare
+      procedure CURSES_init_lib
+      with
+        Import => True,
+        Convention => C,
+        External_Name => "__binding_curses_init_lib";
+   begin
+      CURSES_init_lib;
+   end;
    
 end Curses.Binding;

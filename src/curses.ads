@@ -54,6 +54,7 @@ with Interfaces.C;
 package Curses is
    
    pragma Preelaborate (Curses);
+   pragma Assertion_Policy (Check);
 
    --
    -- General Exceptions
@@ -91,11 +92,18 @@ package Curses is
    -- Graphic_Character --
    -----------------------
    subtype Graphic_Character is Character
-     with Static_Predicate => Graphic_Character in
-       Character'Val (32)  .. Character'Val (126) |
-       Character'Val (160) .. Character'Val (255);
+   with Static_Predicate => Graphic_Character in
+                            Character'Val (32)  .. Character'Val (126) |
+                            Character'Val (160) .. Character'Val (255);
    -- For Character parameters which must be "graphic" only. This predicate is
    -- based on the ARM defition of Characters.Handling.Is_Graphic (A.3.2)
+   
+   -- Temporary GNAT bug workaround
+   -- For whatever reason, GNAT can't handle the below expression in the actual
+   -- Precondition
+   function Check_Graphic (S: String) return Boolean is
+     (for all C of S => C in Graphic_Character)
+     with Inline;
    
    
    ----------------------------
@@ -105,6 +113,11 @@ package Curses is
      with Dynamic_Predicate => 
        Ada.Wide_Characters.Handling.Is_Graphic (Wide_Graphic_Character);
    -- For optionally supported "Wide_Characters". 
+   
+   -- Temporary GNAT bug workaround
+   function Wide_Check_Graphic (S: Wide_String) return Boolean is
+     (for all C of S => C in Wide_Graphic_Character)
+     with Inline;
    
    --
    -- Fundamental Types
@@ -228,7 +241,7 @@ package Curses is
    function "*" (Left, Right: Cursor_Position) return Cursor_Position is
       (Cursor_Position'(Row    => Left.Row    * Right.Row,
                         Column => Left.Column * Right.Column));
-      
+   
    function "/" (Left, Right: Cursor_Position) return Cursor_Position is
       (Cursor_Position'(Row    => Left.Row    / Right.Row,
                         Column => Left.Column / Right.Column));
@@ -466,14 +479,14 @@ package Curses is
                   Overflow      : in     Overflow_Mode   := Truncate;
                   Advance_Cursor: in     Boolean         := False)
      is abstract
-     with Pre'Class => (for all C of Content => C in Graphic_Character);
+     with Pre'Class => (Check_Graphic (Content));
    
    procedure Put (The_Surface   : in out Surface'Class;
                   Content       : in     String;
                   Justify       : in     Justify_Mode    := Left;
                   Overflow      : in     Overflow_Mode   := Truncate;
                   Advance_Cursor: in     Boolean         := False)
-     with Pre => (for all C of Content => C in Graphic_Character);
+     with Pre => (Check_Graphic (Content));
    
    -- Wide_String
    procedure Wide_Put
@@ -486,7 +499,7 @@ package Curses is
       Wide_Fallback : access 
         function (Item: Wide_String) return String := null)
      is abstract
-   with Pre'Class => (for all C of Content => C in Wide_Graphic_Character);
+   with Pre'Class => (Wide_Check_Graphic (Content));
    
    procedure Wide_Put
      (The_Surface   : in out Surface'Class;
@@ -496,7 +509,7 @@ package Curses is
       Advance_Cursor: in     Boolean               := False;
       Wide_Fallback : access 
         function (Item: Wide_String) return String := null)
-   with Pre => (for all C of Content => C in Wide_Graphic_Character);
+   with Pre => (Wide_Check_Graphic (Content));
    
    -- Puts the Content at the location of the selected cursor. If no Cursor is 
    -- provided, the selected cursor is the active cursor for the Surface.
@@ -703,7 +716,7 @@ package Curses is
    --
    -- -- All Possible Exceptions --
    -- * Assertion_Error    : Raised (by the subtype predicate) if any of the
-   --                        border drawing cursors are not graphic
+   --                        border drawing characters are not graphic
    -- * Surface_Unavailable: Raised if The_Surface is not Available
    -- * Curses_Library     : - Wide_Set_Border not supported,
    --                          and no substitution fallback specified; or,

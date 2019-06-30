@@ -56,7 +56,7 @@ package Curses.Terminals is
      tagged limited private;
    -- The Terminal represents the actual terminal device attached to Line
    -- assigned by Device
-      
+   
    -- Line Management --
    ---------------------   
    procedure Attach (TTY  : in out   Terminal;
@@ -185,9 +185,9 @@ package Curses.Terminals is
       -- position of the active Screen's Current_Cursor always.
       
       Screen_Extent);
-      -- The position of the Physical Cursor Park is determined by the
-      -- position of the active Screen's Extent_Cursor always.
-      -- ** This is the default **
+   -- The position of the Physical Cursor Park is determined by the
+   -- position of the active Screen's Extent_Cursor always.
+   -- ** This is the default **
    
    procedure Cursor_Park (TTY : in out Terminal; Park: in Cursor_Park_Select);
    -- Selects where the Physical Cursor is positioned whenever it is "parked".
@@ -214,8 +214,8 @@ package Curses.Terminals is
       -- The Physical_Cursor is always Parked.
       
       Always_Hidden);
-      -- The Physical_Cursor is always Hidden. If it cannot be Hidden, it is
-      -- parked.
+   -- The Physical_Cursor is always Hidden. If it cannot be Hidden, it is
+   -- parked.
    
    procedure Cursor_Mode (TTY : in out Terminal;
                           Mode: in     Cursor_Mode_Select);
@@ -224,6 +224,8 @@ package Curses.Terminals is
    
    
 private
+   
+   
    use Ada.Finalization;
    use Layers;
    use Binding.Color;
@@ -232,8 +234,8 @@ private
    -- Tasking_Order Interface --
    -----------------------------
    -- A Tasking_Order interface provides a generic interface for an object 
-   -- which may be passed to the Executive_Liaison task for serialized execution
-   -- of some task-unsafe complex operation.
+   -- which may be passed to the Executive_Liaison task for serialized 
+   -- execution of some task-unsafe complex operation.
    
    type Tasking_Order is limited interface;
    
@@ -425,27 +427,27 @@ private
    
    function Error_Message (TTY: Terminal) return Library_Error_Message is
      (TTY.Status.Error);
-      
+   
    function Supports_Color         (TTY: in Terminal) return Boolean is
      (TTY.Color_Capable);
-      
+   
    function Supports_Default_Color (TTY: in Terminal) return Boolean is
      (TTY.Default_Color);
-      
+   
    function Supports_Custom_Colors (TTY: in Terminal) return Boolean is
      (TTY.Color_Changeable);
-      
+   
    function Degraded_Palette       (TTY: in Terminal) return Boolean is
      (TTY.Status.Palette_Degraded);
-      
+   
    function Limited_Palette        (TTY: in Terminal) return Boolean is
      (TTY.Status.Palette_Limited);
-      
+   
    function Max_Color_Swatches     (TTY: in Terminal) return Natural is
      (Natural(TTY.Max_Swatches));
    
    function Max_Color_Styles       (TTY: in Terminal) return Natural is
      (Natural(TTY.Max_Styles));
 
-      
+   
 end Curses.Terminals;

@@ -41,59 +41,30 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
--- No Wide support configuration
-
-package body Curses.Binding.Render.Wide is
+package Curses.Binding.Render.Wide is
    
-   pragma Assert (Wide_Support_Configured = False);
+   pragma Elaborate_Body (Wide);
    
-   ---------------------
-   -- Put_Wide_String --
-   ---------------------
+   Wide_Support_Configured: constant Boolean := True;
+   
+   -- See parent Curses.Binding.Render package for description of operation and
+   -- exceptions for the following Wide_String analogs of the parent package 
+   
    procedure Put_Wide_String (Handle: in Surface_Handle;
-                              Buffer: in Wide_String)
-   is begin
-      raise Curses_Library with
-        "Wide character/string support is not configured";
-   end Put_Wide_String;
+                              Buffer: in Wide_String);
    
-   
-   ---------------------
-   -- Get_Wide_String --
-   ---------------------
    procedure Get_Wide_String (Handle: in     Surface_Handle;
                               Buffer:    out Wide_String;
-                              Last  :    out Natural)
-   is begin
-      raise Curses_Library with
-        "Wide character/string support is not configured";
-   end Get_Wide_String;
+                              Last  :    out Natural);
    
-   
-   ------------------------------------
-   -- Wide_Set_Monochrome_Background --
-   ------------------------------------
    procedure Wide_Set_Monochrome_Background
      (Handle          : in Surface_Handle;
       Blank_Character : in Wide_Character;
-      Reference_Cursor: in Cursor'Class)
-   is
-   begin
-      raise Curses_Library with
-        "Wide character/string support is not configured";
-   end Wide_Set_Monochrome_Background;
+      Reference_Cursor: in Cursor'Class);
    
-   
-   --------------------------------
-   -- Wide_Set_Monochrome_Border --
-   --------------------------------
    procedure Wide_Set_Monochrome_Border 
      (Handle          : in Surface_Handle;
       Reference_Cursor: in Cursor'Class;
-      LS, RS, TS, BS, TL, TR, BL, BR: in Wide_Character)
-   is begin
-      raise Curses_Library with
-        "Wide character/string support is not configured";
-   end Wide_Set_Monochrome_Border;
+      LS, RS, TS, BS, TL, TR, BL, BR: in Wide_Character);
    
 end Curses.Binding.Render.Wide;

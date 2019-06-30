@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --

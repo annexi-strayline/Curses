@@ -10,7 +10,7 @@ The library has the following key features:
   * Includes a unified color space shared amongst all terminals
   * Supports cross-terminal Surface (window, pad) transcription
 * Abstracted "Surface" type represents traditional curses Windows, with fully automatic re-rendering on update, including visibility computation (automatic layering).
-* The Curses package does not use allocators anywhere (however the (n)curses library itself likely does use allocate from the heap). All objects are stack allocated, unless explicitly created with a user-defined allocator.
+* The Curses package does not use allocators anywhere (however the (n)curses library itself likely does use allocations from the heap). All objects are stack allocated, unless explicitly created with a user-defined allocator.
 
 # State of Release
 This package is currently in **pre-release alpha** and is still very much under development. 
@@ -27,6 +27,29 @@ Core functionality (Surface primitives) is complete and working. Work on higher-
 - [ ] "Dialog boxes", Menus, Forms, etc.
 - [ ] Expanded documentation
 - [ ] Examples
+
+# Building and using
+This library is presented as a gpr "library project" - libnadacurses.gpr.
+
+The library can be built directly with grpbuild, or included within another project file.
+
+The library project has two primary configuration properties \(set with -XProperty=..\), as follows:
+
+1. HOST_OS
+
+   * FreeBSD
+   * Solaris
+   * Linux
+     Linux should have a distribution set if relevent, which shall be one of the following:
+     * Ubuntu \(Default\)
+
+2. WIDE_SUPPORT
+
+   * NO \(Default\)
+     No wide character (unicode) support. This links with the regular ncurses library.
+
+   * YES
+     Includes full wide character support. This requires the ncursesw library. When using this option, ensure the terminal supports wide character or UTF-8 encoding, and that "locale" for the terminal is set appropriately (eg. en_US.UTF-8).
 
 # Alpha test-drive
 
@@ -85,17 +108,21 @@ begin
 end Example;
 ```
 
-This example code can be found in the root directory under example.adb.
+This example code can be found in the root directory under Tests/example.adb. A gprbuild project file can be found in the root directory as example.gpr
 
 Compile as follows (gnat must be installed):
 ```
-$ gcc -c *.c
-$ gnatmake example
+$ gprbuild -p -P example.adb -XHOST_OS=[Your host OS]
 ```
+
+HOST_OS Must be set to one of the three currently supported OS types:
+1. "Linux"
+2. "FreeBSD"
+3. "Solaris"
+
 
 This binding has been tested to work as is on
 - FreeBSD
 - Linux
-
-This binding has been tested to work with modification to the curses-binding-sys.c file. See the file for comments in the includes section.
 - Solaris (illumos)
+

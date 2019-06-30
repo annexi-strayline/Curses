@@ -41,14 +41,32 @@
 **                                                                          **
 *****************************************************************************/
 
+#include <unistd.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
-#include <sys/ioctl.h>          /* solaris - <unistd.h> + <termio.h> */
+
+#ifdef __NADACURSES_WIDE_SUPPORT
+#include <locale.h>
+#endif
+
+#if defined (__NADACURSES_HOST_OS_LINUX) || \
+    defined (__NADACURSES_HOST_OS_FREE_BSD)
+#include <sys/ioctl.h>
+#include <ncurses.h>
+
+#elif defined (__NADACURSES_HOST_OS_SOLARIS) 
+#include <unistd.h>
+#include <termio.h>
+#include <ncurses/ncurses.h>
+
+#else
+#error "Host OS not supported."
+#endif
 
 
-#include <ncurses.h>            /* solaris <ncurses/ncurses.h> */
 
 #define BOOL_FALSE 0
 #define BOOL_TRUE  1
@@ -203,6 +221,21 @@ int __binding_curses_sys_errno ( void )
 }
 
 
+/* procedure CURSES_CURSES_init_lib                */
+/*   with                                          */
+/*   Import => True,                               */
+/*   Convention => C,                              */
+/*   External_Name => "__binding_curses_init_lib"; */
+
+void __binding_curses_init_lib ( void )
+{
+#ifdef __NADACURSES_WIDE_SUPPORT
+     setlocale ( LC_ALL, "" );
+#endif
+     return;
+}
+
+
 /****************************/
 /* Curses.Binding.Terminals */
 /****************************/
@@ -273,6 +306,9 @@ SCREEN * __binding_curses_newterm
 
 void __binding_curses_meta_initterm ( void )
 {
+
+
+     
      /* Cancel the window resize signal (SIGWINCH) */
 #ifdef SIGWINCH
      struct sigaction ignore_action;
