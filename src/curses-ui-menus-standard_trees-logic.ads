@@ -149,7 +149,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          
          function  Tree  return Standard_Tree_Access;
          function  Index return Index_Type;
-         -- All newly allocated elements (through Standard_Tree.New_Item) shall
+         -- All newly allocated elements (through Standard_Tree.Create) shall
          -- set Identity by providing the element with a reference to the Tree
          -- on which it has membership, as well as its own Index values.
          --
@@ -325,9 +325,9 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
         with Inline, Post => Staging_Branch'Result in Menu_Branch'Class;
       
       overriding
-      function New_Item (Tree: aliased in out Menu_Tree)
-                        return Standard_Cursor'Class
-        with Post => New_Item'Result in Menu_Cursor'Class;
+      function Create (Tree: aliased in out Menu_Tree)
+                      return Standard_Cursor'Class
+        with Post => Create'Result in Menu_Cursor'Class;
       
       overriding
       procedure Delete (Tree    : in out Menu_Tree;

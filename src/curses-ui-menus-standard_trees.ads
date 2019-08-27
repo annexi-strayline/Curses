@@ -107,12 +107,10 @@ package Curses.UI.Menus.Standard_Trees with Preelaborate is
    
    -- Allocation --
    ----------------
-   function New_Item (Tree: aliased in out Standard_Tree)
-                     return Standard_Cursor'Class is abstract;
+   function Create (Tree: aliased in out Standard_Tree)
+                   return Standard_Cursor'Class is abstract;
    -- Allocates a new Menu_Item from Tree, and returns a cursor referencing
-   -- it. New_Items are not associated with any branch. If the Item is not
-   -- later assigned to a Branch, it will be deleted during Finalization of the
-   -- Cursor
+   -- it. New_Items are always appended to the Staging_Branch.
    
    procedure Delete (Tree    : in out Standard_Tree;
                      Position: in out Standard_Cursor'Class)

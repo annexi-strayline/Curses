@@ -951,12 +951,12 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
       end Tree_Controller;
       
       
-      --------------
-      -- New_Item --
-      --------------
+      ------------
+      -- Create --
+      ------------
       overriding
-      function New_Item (Tree: aliased in out Menu_Tree)
-                        return Standard_Cursor'Class
+      function Create (Tree: aliased in out Menu_Tree)
+                      return Standard_Cursor'Class
       is
          New_Index: Index_Type := Null_Index;
          
@@ -1011,7 +1011,7 @@ package body Curses.UI.Menus.Standard_Trees.Logic is
                
             end return;
          end;
-      end New_Item;
+      end Create;
       
       
       ------------
