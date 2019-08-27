@@ -1362,9 +1362,9 @@ package body Curses.Terminals.Surfaces.Standard is
    ----------------
    -- New_Window --
    ----------------
-   function  New_Window (On_Screen       : not null access Screen'Class;
-                         Top_Left        : in Cursor_Position;
-                         Proposed_Extents: in Cursor_Position)
+   function  New_Window (On_Screen       : aliased in out Screen'Class;
+                         Top_Left        :         in     Cursor_Position;
+                         Proposed_Extents:         in     Cursor_Position)
                         return Window
    is
       use Curses.Binding;
@@ -1372,7 +1372,7 @@ package body Curses.Terminals.Surfaces.Standard is
       
    begin
       -- Go right to a build-in-place
-      return The_Window: Window (Parent_Screen => On_Screen,
+      return The_Window: Window (Parent_Screen => On_Screen'Access,
                                  TTY           => On_Screen.TTY)
       do
         -- Note that all Surfaces are initialized as neither Visible or Armed.
@@ -1415,8 +1415,8 @@ package body Curses.Terminals.Surfaces.Standard is
    end New_Window;
    
    ----------------------------------------
-   function  New_Window (On_Screen       : not null access Screen'Class;
-                         Proposed_Extents: in Cursor_Position)
+   function  New_Window (On_Screen       : aliased in out Screen'Class;
+                         Proposed_Extents:         in     Cursor_Position)
                         return Window
    is
       Screen_Extents: constant Cursor_Position := On_Screen.Extents;
@@ -1441,7 +1441,7 @@ package body Curses.Terminals.Surfaces.Standard is
       
    exception
       when others =>
-         return Null_Window: Window (Parent_Screen => On_Screen,
+         return Null_Window: Window (Parent_Screen => On_Screen'Access,
                                      TTY           => On_Screen.TTY)
          do
            Invalidate_Handle (Null_Window.Handle);

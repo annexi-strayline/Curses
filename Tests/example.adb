@@ -14,7 +14,7 @@ begin
    declare
       Main_Screen: aliased Screen (TTY'Access);
       My_Window  : Window 
-        := New_Window (On_Screen        => Main_Screen'Access,
+        := New_Window (On_Screen        => Main_Screen,
                        Proposed_Extents => (Row => 4, Column => 40));
       
       Input_Char: Control_Character;

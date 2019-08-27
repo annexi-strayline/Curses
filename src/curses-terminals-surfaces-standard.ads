@@ -149,16 +149,15 @@ package Curses.Terminals.Surfaces.Standard is
    -- New Windows are always placed at the Top of the Screen's Window
    -- hierarchy, but are initialized as not Visible, and not Armed.
    
-   
-   function  New_Window (On_Screen       : not null access Screen'Class;
-                         Proposed_Extents: in Cursor_Position)
+   function  New_Window (On_Screen       : aliased in out Screen'Class;
+                         Proposed_Extents:         in     Cursor_Position)
                         return Window;
    -- Attempts to open a new window of the size specified by Extents.
    -- The new Window will, if possible, be centered on the Screen.
    
-   function  New_Window (On_Screen       : not null access Screen'Class;
-                         Top_Left        : in Cursor_Position;
-                         Proposed_Extents: in Cursor_Position)
+   function  New_Window (On_Screen       : aliased in out Screen'Class;
+                         Top_Left        :         in     Cursor_Position;
+                         Proposed_Extents:         in     Cursor_Position)
                         return Window;
    
    -- Attempts to open a new window of the size and/or location specified. If
