@@ -92,6 +92,46 @@ package Curses.Terminals.Surfaces.Standard is
    --                         - Any unexpected exception
    
    
+   -- Window Creation --
+   ---------------------
+   -- See the Window type below for greater detail on the role and behaviour
+   -- of Windows
+   
+   function  New_Window (On_Screen       : aliased in out Screen;
+                         Proposed_Extents:         in     Cursor_Position)
+                        return Window'Class;
+   -- Attempts to open a new window of the size specified by Extents.
+   -- The new Window will, if possible, be centered on the Screen.
+   
+   function  New_Window (On_Screen       : aliased in out Screen;
+                         Top_Left        :         in     Cursor_Position;
+                         Proposed_Extents:         in     Cursor_Position)
+                        return Window'Class;
+   
+   -- Attempts to open a new window of the size and/or location specified. If
+   -- no position is specified, the Window is centered on the parent Screen.
+   --
+   -- If provided, Top_Left is a coordinate on the parent Screen, from which
+   -- the Window's top-left corner will be located.
+   --
+   -- The Window size and position are not dependent on the Screen or Terminal
+   -- size. Any Windows which are not within the Screen Extents will not be 
+   -- will not be Visible, while partial coverage will result in the Window
+   -- being Clipped (if Visible or Armed)
+   --
+   -- New Windows are always placed at the top of the Window hierarchy for the
+   -- parent Screen, and are always initialized as not Visible, and not Armed.
+   --
+   -- Windows can only be "closed" by finalization, through the Window object
+   -- going out of scope. Otherwise, Show and Hide should be used to 
+   -- temporarily change the visibility.
+   --
+   -- If the Window could not be opened for any reason, it will be initialized
+   -- as an "Unavilable" Surface. This includes the case where the parent
+   -- Screen is also not Available.
+   -- -- Suppresses All Exceptions --
+   
+   
    -- Internal Procedures --
    -------------------------
    function  Update (The_Screen: in out Screen) return Cursor;
@@ -148,41 +188,6 @@ package Curses.Terminals.Surfaces.Standard is
    --
    -- New Windows are always placed at the Top of the Screen's Window
    -- hierarchy, but are initialized as not Visible, and not Armed.
-   
-   function  New_Window (On_Screen       : aliased in out Screen'Class;
-                         Proposed_Extents:         in     Cursor_Position)
-                        return Window;
-   -- Attempts to open a new window of the size specified by Extents.
-   -- The new Window will, if possible, be centered on the Screen.
-   
-   function  New_Window (On_Screen       : aliased in out Screen'Class;
-                         Top_Left        :         in     Cursor_Position;
-                         Proposed_Extents:         in     Cursor_Position)
-                        return Window;
-   
-   -- Attempts to open a new window of the size and/or location specified. If
-   -- no position is specified, the Window is centered on the parent Screen.
-   --
-   -- If provided, Top_Left is a coordinate on the parent Screen, from which
-   -- the Window's top-left corner will be located.
-   --
-   -- The Window size and position are not dependent on the Screen or Terminal
-   -- size. Any Windows which are not within the Screen Extents will not be 
-   -- will not be Visible, while partial coverage will result in the Window
-   -- being Clipped (if Visible or Armed)
-   --
-   -- New Windows are always placed at the top of the Window hierarchy for the
-   -- parent Screen, and are always initialized as not Visible, and not Armed.
-   --
-   -- Windows can only be "closed" by finalization, through the Window object
-   -- going out of scope. Otherwise, Show and Hide should be used to 
-   -- temporarily change the visibility.
-   --
-   -- If the Window could not be opened for any reason, it will be initialized
-   -- as an "Unavilable" Surface. This includes the case where the parent
-   -- Screen is also not Available.
-   -- -- Suppresses All Exceptions --
-
    
    function Top_Left     (The_Window: in out Window) return Cursor_Position;
    function Bottom_Right (The_Window: in out Window) return Cursor_Position 

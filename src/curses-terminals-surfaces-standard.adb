@@ -317,6 +317,99 @@ package body Curses.Terminals.Surfaces.Standard is
    end Resize;
    
    
+   
+   ----------------
+   -- New_Window --
+   ----------------
+   function  New_Window (On_Screen       : aliased in out Screen;
+                         Top_Left        :         in     Cursor_Position;
+                         Proposed_Extents:         in     Cursor_Position)
+                        return Window'Class
+   is
+      use Curses.Binding;
+      use Curses.Binding.Render;
+      
+   begin
+      -- Go right to a build-in-place
+      return The_Window: Window (Parent_Screen => On_Screen'Access,
+                                 TTY           => On_Screen.TTY)
+      do
+        -- Note that all Surfaces are initialized as neither Visible or Armed.
+        -- The user is always responsible for 
+        
+        -- We *always* add ourselves to the Parent_Screen's Window_Rack, no 
+        -- matter what the situation. This is reversed during finalization.
+        On_Screen.Window_Rack.Prepend (The_Window);
+        
+        if not The_Window.Parent_Screen.Available then
+           return;
+        end if;
+        
+        declare begin
+           The_Window.Handle := Create_Surface
+             (TTY => The_Window.TTY.Handle,
+              Extents  => Proposed_Extents);
+        exception
+           when others =>
+              -- Create_Surface failed.
+              The_Window.Handle := Invalid_Handle;
+              return;
+        end;
+        
+        -- Set the current Extents for the Surface
+        The_Window.Properties.Extents (Proposed_Extents);
+        
+        -- Looks good, set-up the Window position and commit
+        The_Window.Position.Propose (Top_Left);
+        The_Window.Position.Commit;
+        
+      exception
+         when others =>
+            if Handle_Valid (The_Window.Handle) then
+               Destroy_Surface (The_Window.Handle);
+            end if;
+            
+      end return;
+      
+   end New_Window;
+   
+   ----------------------------------------
+   function  New_Window (On_Screen       : aliased in out Screen;
+                         Proposed_Extents:         in     Cursor_Position)
+                        return Window'Class
+   is
+      Screen_Extents: constant Cursor_Position := On_Screen.Extents;
+      Top_Left      :          Cursor_Position;
+   begin
+      
+      -- Our basic job is to calculate the center of the Screen, and then to
+      -- pass it up to the full New_Window as Top_Left
+      
+      -- Note that this could lead quite easily lead to to an exception, since
+      -- there are a number of Proposed_Extent values that would result in
+      -- a Constraint_Error in the below computations. This is generally
+      -- handled by the exception handler.
+      
+      Top_Left.Row    := (Screen_Extents.Row / 2) - (Proposed_Extents.Row / 2);
+      Top_Left.Column := (Screen_Extents.Column / 2) 
+        - (Proposed_Extents.Column / 2);
+      
+      return New_Window (On_Screen        => On_Screen,
+                         Proposed_Extents => Proposed_Extents,
+                         Top_Left         => Top_Left);
+      
+   exception
+      when others =>
+         return Null_Window: Window (Parent_Screen => On_Screen'Access,
+                                     TTY           => On_Screen.TTY)
+         do
+           Invalidate_Handle (Null_Window.Handle);
+           On_Screen.Window_Rack.Prepend (Null_Window);
+         end return;
+   end New_Window;
+   
+   
+   
    ------------
    -- Update --
    ------------
@@ -1359,95 +1452,7 @@ package body Curses.Terminals.Surfaces.Standard is
    -- Window Surface Implementation
    -- 
    
-   ----------------
-   -- New_Window --
-   ----------------
-   function  New_Window (On_Screen       : aliased in out Screen'Class;
-                         Top_Left        :         in     Cursor_Position;
-                         Proposed_Extents:         in     Cursor_Position)
-                        return Window
-   is
-      use Curses.Binding;
-      use Curses.Binding.Render;
-      
-   begin
-      -- Go right to a build-in-place
-      return The_Window: Window (Parent_Screen => On_Screen'Access,
-                                 TTY           => On_Screen.TTY)
-      do
-        -- Note that all Surfaces are initialized as neither Visible or Armed.
-        -- The user is always responsible for 
-        
-        -- We *always* add ourselves to the Parent_Screen's Window_Rack, no 
-        -- matter what the situation. This is reversed during finalization.
-        On_Screen.Window_Rack.Prepend (The_Window);
-        
-        if not The_Window.Parent_Screen.Available then
-           return;
-        end if;
-        
-        declare begin
-           The_Window.Handle := Create_Surface
-             (TTY => The_Window.TTY.Handle,
-              Extents  => Proposed_Extents);
-        exception
-           when others =>
-              -- Create_Surface failed.
-              The_Window.Handle := Invalid_Handle;
-              return;
-        end;
-        
-        -- Set the current Extents for the Surface
-        The_Window.Properties.Extents (Proposed_Extents);
-        
-        -- Looks good, set-up the Window position and commit
-        The_Window.Position.Propose (Top_Left);
-        The_Window.Position.Commit;
-        
-      exception
-         when others =>
-            if Handle_Valid (The_Window.Handle) then
-               Destroy_Surface (The_Window.Handle);
-            end if;
-            
-      end return;
-      
-   end New_Window;
-   
-   ----------------------------------------
-   function  New_Window (On_Screen       : aliased in out Screen'Class;
-                         Proposed_Extents:         in     Cursor_Position)
-                        return Window
-   is
-      Screen_Extents: constant Cursor_Position := On_Screen.Extents;
-      Top_Left      :          Cursor_Position;
-   begin
-      
-      -- Our basic job is to calculate the center of the Screen, and then to
-      -- pass it up to the full New_Window as Top_Left
-      
-      -- Note that this could lead quite easily lead to to an exception, since
-      -- there are a number of Proposed_Extent values that would result in
-      -- a Constraint_Error in the below computations. This is generally
-      -- handled by the exception handler.
-      
-      Top_Left.Row    := (Screen_Extents.Row / 2) - (Proposed_Extents.Row / 2);
-      Top_Left.Column := (Screen_Extents.Column / 2) 
-        - (Proposed_Extents.Column / 2);
-      
-      return New_Window (On_Screen        => On_Screen,
-                         Proposed_Extents => Proposed_Extents,
-                         Top_Left         => Top_Left);
-      
-   exception
-      when others =>
-         return Null_Window: Window (Parent_Screen => On_Screen'Access,
-                                     TTY           => On_Screen.TTY)
-         do
-           Invalidate_Handle (Null_Window.Handle);
-           On_Screen.Window_Rack.Prepend (Null_Window);
-         end return;
-   end New_Window;
+
    
    
    

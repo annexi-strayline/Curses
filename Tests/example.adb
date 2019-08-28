@@ -13,9 +13,9 @@ begin
 
    declare
       Main_Screen: aliased Screen (TTY'Access);
-      My_Window  : Window 
-        := New_Window (On_Screen        => Main_Screen,
-                       Proposed_Extents => (Row => 4, Column => 40));
+      My_Window  : Window'Class 
+        := Main_Screen.New_Window 
+          (Proposed_Extents => (Row => 4, Column => 40));
       
       Input_Char: Control_Character;
       -- This will be centered on the screen, of size 3x40
