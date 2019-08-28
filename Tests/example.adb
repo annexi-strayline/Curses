@@ -8,6 +8,8 @@ with Curses.Device.Environment;
 procedure Example is
    TTY: aliased Terminal (Curses.Device.Environment.Environment_Terminal);
    subtype Control_Character is Curses.Terminals.Surfaces.Control_Character;
+   
+   use all type Curses.Terminals.Surfaces.Control_Class;
 begin
    TTY.Attach;
 
@@ -29,15 +31,30 @@ begin
       My_Window.Position_Cursor ( (Row    => 2,
                                    Column => (My_Window.Extents.Column / 2)) );
       
-      My_Window.Put (Content        => "Hello, world!",
+      My_Window.Put (Content        => "Type 'x' to exit.",
                      Justify        => Center,
+                     Advance_Cursor => True);
+      
+      
+      My_Window.Position_Cursor ( (Row => 3, Column => 2) );
+      My_Window.Put (Content => ">",
                      Advance_Cursor => True);
       
       My_Window.Show;
       -- New windows are hidden by default
       
-      Input_Char := My_Window.Input_Key;
-      -- Wait for key press
+      loop
+         Input_Char := My_Window.Input_Key (Poll_Period => 0.01);
+         exit when Input_Char.Class = Graphic
+           and then Input_Char.Key = 'x';
+         
+         if Input_Char.Class = Graphic 
+           and then My_Window.Current_Cursor.Position < My_Window.Extents 
+         then
+            My_Window.Put (Content => String'(1..1 => Input_Char.Key),
+                           Advance_Cursor => True);
+         end if;
+      end loop;
       
       -- That's it, the Curses package will automatically shut everything down
       -- for you!

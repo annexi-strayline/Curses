@@ -1556,7 +1556,8 @@ package body Curses.Terminals.Surfaces is
    ----------------------------------------
    function Input_Key (The_Surface  : in out Rendered_Surface;
                        Peek         : in     Boolean           := False;
-                       Wait         : in     Boolean           := True)
+                       Wait         : in     Boolean           := True;
+                       Poll_Period  : in     Duration          := 0.1)
                       return Control_Character
    is
       use Binding.Terminals;
@@ -1564,17 +1565,13 @@ package body Curses.Terminals.Surfaces is
       Raw_Input   : CURSES_Character;
       The_Key     : Control_Character;
       
-      Scaled_Delay: Duration := 0.0;
    begin
       -- First ensure that the Surface is valid
       if not The_Surface.Available then
-         return Control_Character'(Class => No_Key);
+         return Control_Character'(Class => Invalid);
       end if;
       
-      -- We need to be pulling from a "Focused" Surface that is currently
-      -- Visible. However, we don't want to Wait on Visibility if the target
-      -- Surface isn't even Focused!
-      if not The_Surface.Focused or else not The_Surface.Visible then
+      if not The_Surface.Focused then
          if Wait then
             -- Queue-up in order!
             while not The_Surface.Focused loop
@@ -1624,20 +1621,13 @@ package body Curses.Terminals.Surfaces is
             return The_Key;
             
          else
-            -- Otherwise, try again in a bit (if we are still Focused), or wait
-            -- until we regain focus
             if not The_Surface.Focused then
-               while not The_Surface.Focused loop
-                  The_Surface.Wait_Focused;
-                  The_Surface.Wait_Visible;
-               end loop;
+               -- Test the function first since this allows multiple readers
+               -- whereas going strait for Wait_Focused puts us on a serial
+               -- queue. We only want to wait if we need to
+               The_Surface.Wait_Focused;
             else
-               if Scaled_Delay < 0.2 then
-                  delay Scaled_Delay;
-                  Scaled_Delay := Scaled_Delay + 0.01;
-               else
-                  delay 0.2;
-               end if;
+               delay Poll_Period;
             end if;
          end if;
          

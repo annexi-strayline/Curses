@@ -227,10 +227,6 @@ package Curses.Terminals.Surfaces is
    ----------------------
    -- Rendered_Surface --
    ----------------------
-   Input_Blocked: exception;
-   -- Optionally raised during an Input operation on call of a non-blocking
-   -- Input operation which would otherwise block. See the Input primitive
-   -- operation of the Surface type specified for this package.
    
    -- Control_Character --
    -----------------------
@@ -352,7 +348,8 @@ package Curses.Terminals.Surfaces is
    
    function  Input_Key  (The_Surface  : in out Rendered_Surface;
                          Peek         : in     Boolean  := False;
-                         Wait         : in     Boolean  := True)
+                         Wait         : in     Boolean  := True;
+                         Poll_Period  : in     Duration := 0.1)
                         return Control_Character;
    -- Returns a single key from the Surface's Terminal input buffer. If Peek is
    -- True the key is left in the buffer.
@@ -360,11 +357,16 @@ package Curses.Terminals.Surfaces is
    -- If Wait is true, the operation blocks until a key is available.
    -- Otherwise, No_Key Class Control_Key is returned. 
    --
-   -- For visible Surface types (such as Standard.Screen'Class, and
-   -- Standard.Window'Class), Surface must be Focused to receive input. If it
-   -- is not currently Focused, Input_Key will either block until Focus is
-   -- received, or else will return a Lost_Focus discriminated
+   -- If no key is available and The_Surface currently has focus, Input_Key
+   -- will poll the terminal input with a period of Poll_Period.
+   --
+   -- The_Surface must be Focused to receive input. If it is not currently
+   -- Focused, Input_Key will either block until Focus is received
+   -- (Wait = True), or else will return a Lost_Focus discriminated
    -- Control_Character.
+   --
+   -- If The_Surface is not Available, an Invalid Control_Key class
+   -- is returned
    --
    -- Upon any unexpected error, an Invalid Control_Key class is returned.
    -- -- Suppresses All Exceptions --
