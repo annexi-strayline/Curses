@@ -1556,8 +1556,7 @@ package body Curses.Terminals.Surfaces is
    ----------------------------------------
    function Input_Key (The_Surface  : in out Rendered_Surface;
                        Peek         : in     Boolean           := False;
-                       Wait         : in     Boolean           := True;
-                       Poll_Period  : in     Duration          := 0.1)
+                       Wait         : in     Boolean           := True)
                       return Control_Character
    is
       use Binding.Terminals;
@@ -1571,7 +1570,7 @@ package body Curses.Terminals.Surfaces is
          return Control_Character'(Class => Invalid);
       end if;
       
-      if not The_Surface.Focused then
+      if not The_Surface.Visible or else not The_Surface.Focused then
          if Wait then
             -- Queue-up in order!
             while not The_Surface.Focused loop
@@ -1621,13 +1620,16 @@ package body Curses.Terminals.Surfaces is
             return The_Key;
             
          else
-            if not The_Surface.Focused then
-               -- Test the function first since this allows multiple readers
-               -- whereas going strait for Wait_Focused puts us on a serial
-               -- queue. We only want to wait if we need to
-               The_Surface.Wait_Focused;
+            if not The_Surface.Visible or else not The_Surface.Focused then
+               while not The_Surface.Focused loop
+                  The_Surface.Wait_Focused;
+                  The_Surface.Wait_Visible;
+               end loop;
+               
             else
-               delay Poll_Period;
+               delay 0.05;
+               -- This is a good trade-off between good responsiveness and
+               -- CPU-intensive busy-waiting
             end if;
          end if;
          

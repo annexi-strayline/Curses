@@ -348,8 +348,7 @@ package Curses.Terminals.Surfaces is
    
    function  Input_Key  (The_Surface  : in out Rendered_Surface;
                          Peek         : in     Boolean  := False;
-                         Wait         : in     Boolean  := True;
-                         Poll_Period  : in     Duration := 0.1)
+                         Wait         : in     Boolean  := True)
                         return Control_Character;
    -- Returns a single key from the Surface's Terminal input buffer. If Peek is
    -- True the key is left in the buffer.
@@ -358,12 +357,12 @@ package Curses.Terminals.Surfaces is
    -- Otherwise, No_Key Class Control_Key is returned. 
    --
    -- If no key is available and The_Surface currently has focus, Input_Key
-   -- will poll the terminal input with a period of Poll_Period.
+   -- will block until a key is available
    --
-   -- The_Surface must be Focused to receive input. If it is not currently
-   -- Focused, Input_Key will either block until Focus is received
-   -- (Wait = True), or else will return a Lost_Focus discriminated
-   -- Control_Character.
+   -- The_Surface must be both Visible and Focused to receive input. If it is
+   -- not currently Focused and Visible, Input_Key will either block until
+   -- Focused and Visible return True, or else will return a Lost_Focus 
+   -- discriminated Control_Character.
    --
    -- If The_Surface is not Available, an Invalid Control_Key class
    -- is returned

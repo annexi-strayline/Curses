@@ -44,7 +44,7 @@ begin
       -- New windows are hidden by default
       
       loop
-         Input_Char := My_Window.Input_Key (Poll_Period => 0.01);
+         Input_Char := My_Window.Input_Key;
          exit when Input_Char.Class = Graphic
            and then Input_Char.Key = 'x';
          
