@@ -1751,4 +1751,20 @@ package body Curses.Terminals.Surfaces.Standard is
    end Finalize;
    
    
+   ---------------
+   -- Input_Key --
+   ---------------
+   overriding 
+   function Input_Key  (The_Surface: in out Window;
+                        Peek       : in     Boolean  := False;
+                        Wait       : in     Boolean  := True)
+                       return Control_Character
+   is
+   begin
+      The_Surface.Parent_Screen.Window_Input_Intercept;
+      
+      return Rendered_Surface(The_Surface).Input_Key (Peek => Peek,
+                                                      Wait => Wait);
+   end Input_Key;
+   
 end Curses.Terminals.Surfaces.Standard;

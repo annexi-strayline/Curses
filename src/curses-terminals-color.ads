@@ -369,7 +369,7 @@ package Curses.Terminals.Color is
       record
          case Is_Colored is
             when True =>
-               Colored   : Terminals.Color.Colored_Cursor;
+               Colored: Colored_Cursor := (others => <>);
             when False =>
                Monochrome: Cursor := (others => <>);
          end case;

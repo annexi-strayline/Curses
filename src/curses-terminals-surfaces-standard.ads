@@ -61,7 +61,7 @@ package Curses.Terminals.Surfaces.Standard is
    -- Screen --
    ------------
    type Window is tagged;
-   type Screen (TTY: not null access Terminal) is
+   type Screen (TTY: not null access Terminal'Class) is
       limited new Rendered_Surface with private;
    -- The Screen type represents both a full-screen Surface, and a notional
    -- context of a children Windows, somewhat similar to the concept of a 
@@ -100,14 +100,11 @@ package Curses.Terminals.Surfaces.Standard is
    function  New_Window (On_Screen       : aliased in out Screen;
                          Proposed_Extents:         in     Cursor_Position)
                         return Window'Class;
-   -- Attempts to open a new window of the size specified by Extents.
-   -- The new Window will, if possible, be centered on the Screen.
    
    function  New_Window (On_Screen       : aliased in out Screen;
                          Top_Left        :         in     Cursor_Position;
                          Proposed_Extents:         in     Cursor_Position)
                         return Window'Class;
-   
    -- Attempts to open a new window of the size and/or location specified. If
    -- no position is specified, the Window is centered on the parent Screen.
    --
@@ -116,8 +113,8 @@ package Curses.Terminals.Surfaces.Standard is
    --
    -- The Window size and position are not dependent on the Screen or Terminal
    -- size. Any Windows which are not within the Screen Extents will not be 
-   -- will not be Visible, while partial coverage will result in the Window
-   -- being Clipped (if Visible or Armed)
+   -- Visible, while partial coverage will result in the Window being Clipped
+   -- (if Visible or Armed)
    --
    -- New Windows are always placed at the top of the Window hierarchy for the
    -- parent Screen, and are always initialized as not Visible, and not Armed.
@@ -157,6 +154,15 @@ package Curses.Terminals.Surfaces.Standard is
    -- cursor on the terminal screen (including visibility), based on the
    -- currently Focused surface.
    -- -- Suppresses All Exceptions --
+   
+   
+   -- Extention Hooks --
+   ---------------------
+   procedure Window_Input_Intercept (The_Screen: in out Screen) is null;
+   -- All Windows created on the Screen will invoke this procedure immediately 
+   -- on any call to Window.Input_Key. This can enable extensions of the Screen
+   -- type to intercept all input on any decendent Window objects by overriding
+   -- this procedure on extension.
    
    
    -- Derivation Contracts --
@@ -268,7 +274,7 @@ private
         
    end Screen_Modes;
    
-   type Screen (TTY: not null access Terminal) is 
+   type Screen (TTY: not null access Terminal'Class) is 
       limited new Rendered_Surface (TTY) with
       record
         Modes        : Screen_Modes;
@@ -318,7 +324,7 @@ private
    
    ----------------------------------------
    type Window (Parent_Screen: not null access Screen'Class;
-                TTY          : not null access Terminal) is 
+                TTY          : not null access Terminal'Class) is 
       limited new Rendered_Surface (TTY) with
       record
         Position: Official_Position;
@@ -328,7 +334,13 @@ private
         Sub_Window_Rack: Rack;
       end record;
    
+   overriding 
+   function Input_Key  (The_Surface: in out Window;
+                        Peek       : in     Boolean  := False;
+                        Wait       : in     Boolean  := True)
+                       return Control_Character;
+   
    function Same_Screen (A, B: in Window) return Boolean is
       (A.Parent_Screen = B.Parent_Screen);
-      
+   
 end Curses.Terminals.Surfaces.Standard;

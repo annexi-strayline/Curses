@@ -43,7 +43,7 @@
 
 with Ada.Containers;
 
-package Curses.UI.Menus.Standard_Trees with Preelaborate is
+package Curses.UI.Menus.Standard_Trees is
    
    pragma Assertion_Policy (Check);
    

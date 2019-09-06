@@ -292,7 +292,7 @@ package body Curses.Terminals is
          end select;
          
          if TTY.Status.Available then
-            declare begin
+            begin
                -- Ensure the Screen_Rack doesn't change while we work
                Screen_Rack.Freeze;
                Rack_Locked := True;

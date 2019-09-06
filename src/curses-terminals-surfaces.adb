@@ -300,6 +300,7 @@ package body Curses.Terminals.Surfaces is
    begin
       Mod_Cursor.Position := Position;
       The_Surface.Cursor_State.Set (Mod_Cursor);
+      Set_Modified (The_Surface);
       
    exception
       when Cursor_Excursion =>
@@ -549,8 +550,6 @@ package body Curses.Terminals.Surfaces is
            (Handle => The_Surface.Handle,
             Buffer => Content(Select_First .. Select_Last));
          
-         Set_Modified (The_Surface);
-         
       end Execute;
       
       Order: T_O;
@@ -571,7 +570,9 @@ package body Curses.Terminals.Surfaces is
       if Advance_Cursor then
          Set_Cursor.Position := Computer.After_Write;
       end if;
-         
+      
+      Set_Modified (The_Surface);
+      
    exception
       when Surface_Unavailable | Cursor_Excursion | Curses_Library =>
          if Advance_Cursor then

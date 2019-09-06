@@ -52,9 +52,9 @@
 with Ada.Iterator_Interfaces;
 with Ada.Finalization;        use Ada.Finalization;
 
+with Curses.Terminals.Surfaces;
+
 package Curses.UI.Menus is
-   
-   pragma Preelaborate (Menus);
    
    -------------------------
    -- Menu_Item_Interface --
@@ -68,6 +68,11 @@ package Curses.UI.Menus is
    -- actual interface, allows for some interesting possbilities. One specific
    -- use-case is having Menu_Items_Types which actually are or contain tasks,
    -- and thus can be self-managing
+   
+   function Label_Extents (Item: Menu_Item_Interface)
+                          return Cursor_Ordinal is abstract;
+   -- What is the minumum Extents for the Canvas in a call to Render_Label
+   -- which would accomodate the Label. T
    
    procedure Render_Label (Item    : in out Menu_Item_Interface;
                            Canvas  : in out Surface'Class;
@@ -93,6 +98,21 @@ package Curses.UI.Menus is
    -- For basic rendering, Render_Label can often ignore "Selected", as the
    -- menu subsystem will provide the appropriate Theme cursor, and can thus
    -- use exactly the same code to handle both states.
+   --
+   -- The implementor should not assume Canvas will be large enough for the
+   -- label, and should generally avoid raising an exception as a result.
+   
+   
+   function Hot_Key (Item: Menu_Item_Interface) 
+                    return Curses.Terminals.Surfaces.Control_Character
+     is abstract;
+   -- A hot key is a particular single "Control_Character" which should be
+   -- associated with the item to allow direct selection from a keyboard entry
+   -- If the item does not have a hot key, it should return a Control_Characrer
+   -- with a Class discriminent of No_Key
+   --
+   -- Visual indication of the hot key is the responsibility of Render_Label
+   
    
    function Available (Item: Menu_Item_Interface) return Boolean is abstract;
    -- Shall return True if Item is selectable (ie. False is "grayed-out").
@@ -100,17 +120,18 @@ package Curses.UI.Menus is
    type After_Execute_Directive is 
    -- Returned from Execute, tells the menu subsystem what to do following
    -- Execution
-     (Update,      -- Re-render Item, but keep the menu open
-      Regenerate,  -- Re-render the entire Menu tree
-      Close);      -- Close the Menu
+     (Open_Submenu, -- Item is a submenu which should be rendered 
+                    -- (by the caller)
+      Update,       -- Re-render Item, but keep the menu open
+      Regenerate,   -- Re-render the entire Menu tree up and including Item
+      Close);       -- Close the menu (entire menu)
      
    procedure Execute (Item     : in out Menu_Item_Interface;
                       Directive:    out After_Execute_Directive)
      is abstract;
    -- Invoked by the menu subsystem when the user selects the particular Item.
-   -- If Re_Render is set to True upon return, the menu is not closed, and Item
-   -- is re-rendered in-place (though a subsequent call to Item.Render_Label),
-   -- otherwise the entire menu tree is closed
+   -- Execute is called before any existing Submenu is rendered to allow for
+   -- on-demand loading of such a Submenu.
    
    
    -------------------------
@@ -127,6 +148,7 @@ package Curses.UI.Menus is
    function  Submenu (Item: in out Menu_Node_Interface)
                      return Menu_Type'Class
      is abstract;
+   
    
    ----------------------
    -- Menu_Cursor_Type --
@@ -185,6 +207,7 @@ package Curses.UI.Menus is
      (Ref: not null access Menu_Node_Interface'Class) is null record
      with Implicit_Dereference => Ref;
    
+   
    ---------------
    -- Menu_Type --
    ---------------
@@ -224,11 +247,20 @@ package Curses.UI.Menus is
      with null record;
    
    overriding
+   function Label_Extents (Item: Null_Menu_Item_Type)
+                          return Cursor_Ordinal is (1);
+   
+   overriding
    procedure Render_Label (Item    : in out Null_Menu_Item_Type;
                            Canvas  : in out Surface'Class;
                            Selected: in     Boolean)
      is null;
-                           
+   
+   overriding
+   function Hot_Key (Item: Null_Menu_Item_Type)
+                    return Curses.Terminals.Surfaces.Control_Character
+     is (Class => Curses.Terminals.Surfaces.No_Key, others => <>);
+   
    overriding
    function Available (Item: Null_Menu_Item_Type) return Boolean 
      is (False);

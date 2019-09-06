@@ -407,7 +407,7 @@ private
 
 
    ----------------------------------------
-   type Terminal_Surface (TTY: not null access Terminal) is 
+   type Terminal_Surface (TTY: not null access Terminal'Class) is 
      abstract limited new Surface with
       record
          Handle      : Surface_Handle    := Invalid_Handle;
@@ -460,7 +460,7 @@ private
       Soft); -- Surface can be updated (changes only)
    
    ----------------------------------------
-   type Rendered_Surface (TTY: not null access Terminal) is
+   type Rendered_Surface (TTY: not null access Terminal'Class) is
       abstract limited new Terminal_Surface (TTY) with
       record
          Focus: Focus_State;
