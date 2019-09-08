@@ -146,7 +146,6 @@ package body Curses.Binding.Render is
      External_Name => "__binding_curses_winnstr";
    -- Returns number of characters read-in
    
-   
    procedure CURSES_pnoutrefresh (pad             : in Surface_Handle;
                                   pminrow, pmincol: in int;
                                   sminrow, smincol: in int;
@@ -751,6 +750,7 @@ package body Curses.Binding.Render is
          
    end Generic_Get_String;
    
+   
    ----------------------------------------
    procedure Get_String (Handle: in     Surface_Handle;
                          Buffer:    out String;
@@ -770,6 +770,8 @@ package body Curses.Binding.Render is
                          Last   => Last);
    end Get_String;
    
+   
+
    
    --------------------
    -- Render_Surface --

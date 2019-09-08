@@ -79,6 +79,24 @@ package body Curses is
    -- Surface Class-Wide Operations
    --
    
+   ---------------
+   -- Clear_Row --
+   ---------------
+   procedure Clear_Row (The_Surface: in out Surface'Class) is
+   begin
+      The_Surface.Clear_Row (The_Surface.Current_Cursor.Position.Row);
+   end Clear_Row;
+   
+   
+   ------------------
+   -- Clear_Column --
+   ------------------
+   procedure Clear_Column (The_Surface: in out Surface'Class) is
+   begin
+      The_Surface.Clear_Column (The_Surface.Current_Cursor.Position.Column);
+   end Clear_Column;
+   
+   
    ------------------
    -- Clear_To_End --
    ------------------

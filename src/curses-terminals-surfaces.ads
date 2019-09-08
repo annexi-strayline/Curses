@@ -187,18 +187,38 @@ package Curses.Terminals.Surfaces is
                               Use_Cursor : in     Cursor'Class;
                               
                               Left_Side,
-                              Right_Side,
-                              Top_Side,
-                              Bottom_Side,
+                                Right_Side,
+                                Top_Side,
+                                Bottom_Side,
                                 
-                              Top_Left_Corner,
-                              Top_Right_Corner,
-                              Bottom_Left_Corner,
-                              Bottom_Right_Corner: in Wide_Graphic_Character;
+                                Top_Left_Corner,
+                                Top_Right_Corner,
+                                Bottom_Left_Corner,
+                                Bottom_Right_Corner: in Wide_Graphic_Character;
                               
                               Wide_Fallback: access 
                                 function (Item: Wide_Character) 
                                          return Character := null);
+   
+   overriding
+   procedure Sample_Position
+     (Source       : in out Terminal_Surface;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Character;
+      Styled_Cursor: in out Cursor'Class);
+
+   overriding
+   procedure Wide_Sample_Position 
+     (Source       : in out Terminal_Surface;
+      Position     : in     Cursor_Position;
+      Content      :    out Wide_Graphic_Character;
+      Styled_Cursor: in out Cursor'Class);
+
+   overriding
+   function Sample_Position_Cursor (Source  : in out Terminal_Surface;
+                                    Position: in     Cursor_Position)
+                                   return Cursor'Class;
+   
    
    overriding
    procedure Transcribe (Source : in out Terminal_Surface;

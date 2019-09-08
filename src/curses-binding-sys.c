@@ -913,6 +913,51 @@ int __binding_curses_winnstr ( WINDOW * win, char * str, int len )
 }
 
 
+/* procedure CURSES_wmvinch (win                 : in     Surface_Handle; */
+/*                           y, x                : in     int;            */
+/*                           ch                  :    out char;           */
+/*                                                                        */
+/*                           bold, standout, dim,                         */
+/*                           uline, invert, blink: out    unsigned;       */
+/*                                                                        */
+/*                           color_pair          : out short)             */
+/*   with                                                                 */
+/*   Import        => True,                                               */
+/*   Convention    => C,                                                  */
+/*   External_Name => "__binding_curses_mvwinch";                         */
+void __binding_curses_mvwinch
+(
+     WINDOW * win,
+     int y, int x,
+
+     char * ch,
+
+     unsigned * bold,  unsigned * standout, unsigned * dim,
+     unsigned * uline, unsigned * invert,   unsigned * blink,
+
+     short * color_pair
+)
+{
+     chtype c;
+     int attrs;
+
+     c = mvwinch ( win, y, x );
+
+     *ch         = (char )(c & A_CHARTEXT);
+     *color_pair = (short)(c & A_COLOR);
+     attrs       = (int  )(c & A_ATTRIBUTES);
+     
+     *bold     = (attrs & A_BOLD     ) ? 1 : 0;
+     *standout = (attrs & A_STANDOUT ) ? 1 : 0;
+     *dim      = (attrs & A_DIM      ) ? 1 : 0;
+     *uline    = (attrs & A_UNDERLINE) ? 1 : 0;
+     *invert   = (attrs & A_REVERSE  ) ? 1 : 0;
+     *blink    = (attrs & A_BLINK    ) ? 1 : 0;
+
+     return;
+}
+
+
 
 /* procedure CURSES_pnoutrefresh (pad             : in Surface_Handle;   */
 /*                                pminrow, pmincol: in int;              */

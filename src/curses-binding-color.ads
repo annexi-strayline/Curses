@@ -163,6 +163,19 @@ package Curses.Binding.Color is
    -- -- All Possible Exceptions --
    -- *  Curses_Library: Call failed - unable to set border
    
+      
+   procedure Query_Character 
+     (Handle  : in     Surface_Handle;
+      Position: in     Cursor_Position;
+      C       :    out Character;
+      Style   :    out Cursor_Style;
+      Color   :    out CURSES_Color_Pair);
+   -- Retrieves the character, style, and color from a specific location on a
+   -- surface.
+   -- -- All Possible Exceptions --
+   -- *  Curses_Library     : General failure of the operation
+   -- *  Surface_Unavailable: Handle was invalid
+   
    
 private
    
@@ -213,5 +226,34 @@ private
       Reference_Cursor: in Cursor'Class;
       Color           : in CURSES_Color_Pair;
       LS, RS, TS, BS, TL, TR, BL, BR: in Ada_Char_Type);
+   
+   
+   -----------------------------
+   -- Generic_Query_Character --
+   -----------------------------
+   generic
+      type Ada_Char_Type is (<>);
+      type C_Char_Type is (<>);
+      
+      with function To_Ada (Item: in C_Char_Type)
+                           return Ada_Char_Type;
+      
+      with procedure CURSES_generic_mvwinch
+        (win                 : in     Surface_Handle;
+         y, x                : in     int;
+         ch                  :    out C_Char_Type;
+         
+         bold, standout, dim,
+         uline, invert, blink:    out unsigned;
+         
+         color_pair          :    out short);
+        
+   procedure Generic_Query_Character
+     (Handle  : in     Surface_Handle;
+      Position: in     Cursor_Position;
+      C       :    out Ada_Char_Type;
+      Style   :    out Cursor_Style;
+      Color   :    out CURSES_Color_Pair);
+   
    
 end Curses.Binding.Color;

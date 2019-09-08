@@ -70,6 +70,7 @@ package body Curses.Binding.Render.Wide is
    -- Returns number of characters read-in
    
    
+   
    function CURSES_meta_wbkgrnd (win   : in Surface_Handle;
                                  blank : in wchar_t;
                                  bold, standout, dim, uline, invert,

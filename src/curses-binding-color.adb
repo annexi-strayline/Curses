@@ -41,6 +41,8 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Ada.Exceptions;
+
 package body Curses.Binding.Color is
    
    ----------------
@@ -180,6 +182,20 @@ package body Curses.Binding.Color is
      External_Name => "__binding_curses_meta_wborder_color";
    
    
+   procedure CURSES_mvwinch (win                 : in     Surface_Handle;
+                             y, x                : in     int;
+                             ch                  :    out char;
+                             
+                             bold, standout, dim, 
+                             uline, invert, blink:    out unsigned;
+                             
+                             color_pair          :    out short)
+     with
+     Import        => True,
+     Convention    => C,
+     External_Name => "__binding_curses_mvwinch";
+   
+   
    -----------------------
    -- Initialize_Colors --
    -----------------------
@@ -290,12 +306,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";      
-      
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
    end Maximum_Colors;
    
    
@@ -330,12 +347,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";
-      
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
    end Maximum_Pairs;
    
    
@@ -383,12 +401,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";      
-      
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
    end Decompose_Color;
    
    
@@ -435,11 +454,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";      
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
    end Set_Color;
    
    
@@ -485,11 +506,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";      
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
    end Set_Pair;
    
    
@@ -525,11 +548,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";      
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
    end Apply_Pair;
    
    
@@ -604,11 +629,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
       
    end Generic_Set_Colored_Background;
    ----------------------------------------
@@ -705,11 +732,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
          
    end Set_Default_Colored_Border;
    
@@ -796,11 +825,13 @@ package body Curses.Binding.Color is
       when Curses_Library =>
          raise;
          
-      when others =>
+      when e: others =>
          if Lock_OK then
             Serial.Unlock;
          end if;
-         raise Curses_Library with "Unexpected exception";
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
          
    end Generic_Set_Colored_Border;
    ----------------------------------------
@@ -832,5 +863,92 @@ package body Curses.Binding.Color is
                                  BL               => BL,
                                  BR               => BR);
    end Set_Colored_Border;
+   
+   
+   ---------------------
+   -- Query_Character --
+   ---------------------
+   procedure Generic_Query_Character
+     (Handle  : in     Surface_Handle;
+      Position: in     Cursor_Position;
+      C       :    out Ada_Char_Type;
+      Style   :    out Cursor_Style;
+      Color   :    out CURSES_Color_Pair)
+   is
+      Locked: Boolean := False;
+      
+      ch: C_Char_Type;
+      bold, standout, dim, uline, invert, blink: unsigned;
+      color_pair: short;
+   begin
+      if not Handle_Valid (Handle) then
+         raise Surface_Unavailable;
+      end if;
+      
+      Lock_Or_Panic;
+      Locked := True;
+      
+      CURSES_generic_mvwinch
+        (win   => Handle,
+         y     => int (Position.Row) - 1,
+         x     => int (Position.Column) - 1,
+         ch    => ch,
+         
+         bold  => bold,  standout => standout, dim   => dim,
+         uline => uline, invert   => invert,   blink => blink,
+         
+         color_pair => color_pair);
+      
+      Serial.Unlock;
+      Locked := False;
+      
+      C := To_Ada (ch);
+      
+      Style := (Bold      => (bold     > 0),
+                Standout  => (standout > 0),
+                Dim       => (dim      > 0),
+                Underline => (uline    > 0),
+                Inverted  => (invert   > 0),
+                Blink     => (blink    > 0));
+      
+      Color := CURSES_Color_Pair (color_pair);
+         
+   exception
+      when Surface_Unavailable =>
+         raise;
+         
+      when e: others =>
+         if Locked then
+            Serial.Unlock;
+         end if;
+         
+         raise Curses_Library with
+           "Unexpected exception: " & Ada.Exceptions.Exception_Information (e);
+      
+   end Generic_Query_Character;
+   
+   
+   ----------------------------------------
+   procedure Query_Character 
+     (Handle  : in     Surface_Handle;
+      Position: in     Cursor_Position;
+      C       :    out Character;
+      Style   :    out Cursor_Style;
+      Color   :    out CURSES_Color_Pair)
+   is
+      procedure Query_Character_Actual is 
+        new Generic_Query_Character
+          (Ada_Char_Type          => Character,
+           C_Char_Type            => char,
+           To_Ada                 => Interfaces.C.To_Ada,
+           CURSES_generic_mvwinch => CURSES_mvwinch)
+        with Inline;
+   begin
+      Query_Character_Actual (Handle   => Handle,
+                              Position => Position,
+                              C        => C,
+                              Style    => Style,
+                              Color    => Color);
+   end Query_Character;
    
 end Curses.Binding.Color;

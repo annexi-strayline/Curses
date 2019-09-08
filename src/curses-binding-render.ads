@@ -44,6 +44,8 @@
 -- The Render binding child package contains all of the most common output and
 -- surface management operations
 
+with Curses.Binding.Color;
+
 package Curses.Binding.Render is
    
    
@@ -138,6 +140,8 @@ package Curses.Binding.Render is
    -- -- All Possible Exceptions --
    -- *  Curses_Library     : General failure of the operation
    -- *  Surface_Unavailable: Handle was invalid
+
+   
    
    procedure Render_Surface (Handle     : in Surface_Handle;
                              Surface_TL : in Cursor_Position;
@@ -265,6 +269,10 @@ private
    procedure Generic_Get_String (Handle: in     Surface_Handle;
                                  Buffer:    out Ada_String_Type;
                                  Last  :    out Natural);
+   
+   
+
+   
    
    ---------------------------------------
    -- Generic_Set_Monochrome_Background --

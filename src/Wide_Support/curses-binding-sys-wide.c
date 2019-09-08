@@ -132,6 +132,72 @@ int __binding_curses_winnwstr ( WINDOW * win, wchar_t * str, int len )
 }
 
 
+/* procedure CURSES_wmvin_wch (win                 : in     Surface_Handle; */
+/*                             y, x                : in     int;            */
+/*                             ch                  :    out wchar_t;        */
+/*                                                                          */
+/*                             bold, standout, dim,                         */
+/*                             uline, invert, blink:    out unsigned;       */
+/*                                                                          */
+/*                             color_pair          :    out short)          */
+/*   with                                                                   */
+/*   Import        => True,                                                 */
+/*   Convention    => C,                                                    */
+/*   External_Name => "__binding_curses_wmvin_wch";                         */
+
+void __binding_curses_mvwin_wch
+(
+     WINDOW * win,
+     int y, int x,
+     
+     wchar_t * ch,
+     
+     unsigned * bold,  unsigned * standout, unsigned * dim,
+     unsigned * uline, unsigned * invert,   unsigned * blink,
+
+     short * color_pair
+)
+{
+     cchar_t wc;
+     attr_t attrs;
+     wchar_t wch_str[2] = { L'\0', L'\0' };
+     int wch_str_len;
+
+     mvwin_wch ( win, y, x, &wc );
+
+     // The number of wchar_t's stored at this location should be 1!
+     wch_str_len = getcchar ( &wc, NULL, NULL, NULL, NULL );
+
+     if (wch_str_len > 2)
+     {
+          *ch = L'\0';
+          *bold = 0;
+          *standout = 0;
+          *dim = 0;
+          *uline = 0;
+          *invert = 0;
+          *blink = 0;
+
+          *color_pair = 0;
+          return;
+     }
+
+     getcchar ( &wc, wch_str, &attrs, color_pair, NULL );
+
+     *ch = wch_str[0];
+     
+     *bold     = (attrs & A_BOLD     ) ? 1 : 0;
+     *standout = (attrs & A_STANDOUT ) ? 1 : 0;
+     *dim      = (attrs & A_DIM      ) ? 1 : 0;
+     *uline    = (attrs & A_UNDERLINE) ? 1 : 0;
+     *invert   = (attrs & A_REVERSE  ) ? 1 : 0;
+     *blink    = (attrs & A_BLINK    ) ? 1 : 0;
+
+     return;
+}
+
+
+
 /* function CURSES_meta_wbkgrnd (win   : in Surface_Handle;          */
 /*                               blank : in wchar_t;                 */
 /*                               bold, standout, dim, uline, invert, */

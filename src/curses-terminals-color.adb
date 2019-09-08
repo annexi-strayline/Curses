@@ -41,7 +41,9 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Ada.Assertions;
 with Ada.Exceptions; use Ada;
+
 with Curses.Binding.Color;
 with Curses.Binding.Color.Wide;
 
@@ -406,7 +408,7 @@ package body Curses.Terminals.Color is
          return False;
          
       else
-         -- Shouold be ok
+         -- Should be ok
          return True;
          
       end if;
@@ -650,5 +652,114 @@ package body Curses.Terminals.Color is
          raise Curses_Library with
            "Unexpected exception: " & Exceptions.Exception_Information (e);
    end Wide_Apply_Colored_Border;
+   
+   
+   -----------------------------
+   -- Colored_Sample_Position --
+   -----------------------------
+   generic
+      type Graphic_Char_Type is (<>);
+   
+      with procedure Do_Query
+        (Handle  : in     Surface_Handle;
+         Position: in     Cursor_Position;
+         C       :    out Graphic_Char_Type;
+         Style   :    out Cursor_Style;
+         Color   :    out Curses.Binding.Color.CURSES_Color_Pair);
+   
+   procedure Generic_Colored_Sample_Position
+     (Handle       : in     Surface_Handle;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Char_Type;
+      Styled_Cursor: in out Colored_Cursor'Class);
+   
+   
+   procedure Generic_Colored_Sample_Position
+     (Handle       : in     Surface_Handle;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Char_Type;
+      Styled_Cursor: in out Colored_Cursor'Class)
+   is
+      subtype CURSES_Color is Curses.Binding.Color.CURSES_Color;
+      
+      Color_Style: Valid_Style_Index;
+      
+   begin
+      Do_Query (Handle   => Handle,
+                Position => Position,
+                C        => Content,
+                Style    => Styled_Cursor.Style,
+                Color    => Color_Style);
+      
+      -- Force the predicate check here, since we know where the
+      -- failure happened..
+      if Content not in Graphic_Char_Type then
+         raise Curses_Library with "Generic_Colored_Sample_Position: " 
+           & "Surface query apprently returned a "
+           & "non-graphic character. (Codepoint"
+           & Integer'Image (Graphic_Char_Type'Pos (Content))
+           & ')';
+      end if;
+      
+      -- Next we need to query the the Style_Set based on what index we
+      -- get back. However note that the default pair (style) is not a
+      -- valid index for the set. 
+      
+      if Color_Style not in User_Style_Index then
+         -- This should be the Default_Color_Style, and if it isn't, then
+         -- something is wrong and we should force it to that anyways.
+         Styled_Cursor.Color := Default_Color_Style;
+         
+      else
+         -- Look up from the index.
+         Styled_Cursor.Color := Style_Set.Set.Query (Color_Style);
+      end if;
+      
+   end Generic_Colored_Sample_Position;
+   
+   ----------------------------------------
+   procedure Colored_Sample_Position
+     (Handle       : in     Surface_Handle;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Character;
+      Styled_Cursor: in out Colored_Cursor'Class)
+   is
+      procedure Sample_Position_Actual is
+        new Generic_Colored_Sample_Position
+          (Graphic_Char_Type => Graphic_Character,
+           Do_Query          => Curses.Binding.Color.Query_Character)
+        with Inline;
+   begin
+      Sample_Position_Actual (Handle        => Handle,
+                              Position      => Position,
+                              Content       => Content,
+                              Styled_Cursor => Styled_Cursor);
+                              
+   end Colored_Sample_Position;
+   
+   
+   ----------------------------------------
+   procedure Wide_Colored_Sample_Position
+     (Handle       : in     Surface_Handle;
+      Position     : in     Cursor_Position;
+      Content      :    out Wide_Graphic_Character;
+      Styled_Cursor: in out Colored_Cursor'Class)
+   is
+      procedure Sample_Position_Actual is
+        new Generic_Colored_Sample_Position
+          (Graphic_Char_Type => Wide_Graphic_Character,
+           Do_Query          => Curses.Binding.Color.Wide.Wide_Query_Character)
+        with Inline;
+   begin
+      -- Note that since we are reading from an existing surface, if the
+      -- Surface doesn't actually handle Wide_Characters, we'll just get
+      -- a regular Character converted to a Wide_Character
+      
+      Sample_Position_Actual (Handle        => Handle,
+                              Position      => Position,
+                              Content       => Content,
+                              Styled_Cursor => Styled_Cursor);
+                              
+   end Wide_Colored_Sample_Position;
    
 end Curses.Terminals.Color;

@@ -117,13 +117,13 @@ package body Curses.UI.Menus.Renderers is
       The_Surface.Set_Border;
       
       
-      if Main_Menu then 
-         if The_Surface.Extents.Row < 2 then
-            -- Not enough space to do anything
-         end if;
-      else
+--      if Main_Menu then 
+--         if The_Surface.Extents.Row < 2 then
+--            -- Not enough space to do anything
+--         end if;
+--      else
 
-      end if;
+--      end if;
    end Simple_Set_Border;
    
 end Curses.UI.Menus.Renderers;

@@ -53,6 +53,8 @@ package body Curses.Frames is
    
    Assertion_Error: exception renames Ada.Assertions.Assertion_Error;
    
+
+   
    
    --
    -- Frame_State Implementation
@@ -167,6 +169,17 @@ package body Curses.Frames is
       end Auto_Assert;
       
    end Frame_State;
+   
+   
+   --
+   -- Basic Infrastructure
+   --
+   function Target_Position (F: in Frame'Class;
+                             P: in Cursor_Position)
+                            return Cursor_Position
+     is (P + F.State.Target_TL - (1,1))
+     with Inline;
+
    
    
    --
@@ -322,7 +335,7 @@ package body Curses.Frames is
          Mod_Cursor: Cursor'Class := The_Frame.Current_Cursor;
       begin
          Mod_Cursor.Position 
-           := Mod_Cursor.Position + The_Frame.State.Target_TL - (1,1);
+           := Target_Position (The_Frame, Mod_Cursor.Position);
          
          The_Frame.Target.Current_Cursor (Mod_Cursor);
       end;
@@ -354,14 +367,15 @@ package body Curses.Frames is
       
       declare
          Mod_Cursor: Cursor'Class := The_Frame.Target.Current_Cursor;
-         TL: constant Cursor_Position := The_Frame.State.Target_TL;
-         BR: constant Cursor_Position
-           := TL + The_Frame.Extents - (1,1);
+         TL: constant Cursor_Position 
+           := Target_Position (The_Frame, (1,1));
+         BR: constant Cursor_Position 
+           := Target_Position (The_Frame, The_Frame.Extents);
       begin
-         -- Remember that the comparison operators for Cursor_Position are based
-         -- on the idea of a cursor being *either* to the right or below (i.e.
-         -- an extent), we need to be a little more explicit here for seeing if
-         -- the Target's Cursor is in the Frame
+         -- Remember that the comparison operators for Cursor_Position are 
+         -- based on the idea of a cursor being *either* to the right or below
+         -- (i.e. an extent), we need to be a little more explicit here for
+         -- seeing if the Target's Cursor is in the Frame
          
          if ((Mod_Cursor.Position.Row < TL.Row) or else
                (Mod_Cursor.Position.Column < TL.Column))
@@ -421,8 +435,8 @@ package body Curses.Frames is
          declare
             Mod_Cursor: Cursor'Class := New_Cursor;
          begin
-            Mod_Cursor.Position := 
-              Mod_Cursor.Position + The_Surface.State.Target_TL - (1,1);
+            Mod_Cursor.Position := Target_Position 
+              (The_Surface, Mod_Cursor.Position);
             The_Surface.Target.Current_Cursor (Mod_Cursor);
          end;
       end if;
@@ -459,8 +473,8 @@ package body Curses.Frames is
          The_Surface.State.Current_Cursor (Mod_Cursor);
       
          if The_Surface.State.Auto_Assert then
-            Mod_Cursor.Position := 
-              Mod_Cursor.Position + The_Surface.State.Target_TL - (1,1);
+            Mod_Cursor.Position := Target_Position 
+              (The_Surface, Mod_Cursor.Position);
             
             The_Surface.Target.Current_Cursor (Mod_Cursor);
          end if;
@@ -722,8 +736,6 @@ package body Curses.Frames is
       Select_First: Natural renames Computer.Select_First;
       Select_Last : Natural renames Computer.Select_Last;
       
-      Offset: constant Cursor_Position := The_Surface.State.Target_TL;
-      
    begin
       -- Really just a matter of translating the position and then passing it
       -- on to the Target
@@ -735,7 +747,9 @@ package body Curses.Frames is
       end if;
       
       while Computer.Compute_Line loop
-         Write_Cursor.Position := Write_Position + Offset - (1,1);
+         Write_Cursor.Position := Target_Position 
+           (The_Surface, Write_Position);
+         
          Target_Put (The_Surface => The_Surface.Target.all,
                      Set_Cursor  => Write_Cursor,
                      Content     => Content (Select_First .. Select_Last),
@@ -1279,7 +1293,6 @@ package body Curses.Frames is
                                     
    
    ----------------------------------------
-   
    overriding
    procedure Set_Border (The_Surface: in out Frame;
                          Use_Cursor : in     Cursor'Class;
@@ -1403,6 +1416,47 @@ package body Curses.Frames is
       end if;
          
    end Wide_Set_Border;
+   
+   
+   ---------------------
+   -- Sample_Position --
+   ---------------------
+   overriding
+   procedure Sample_Position
+     (Source       : in out Frame;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Character;
+      Styled_Cursor: in out Cursor'Class)
+   is begin
+      Source.Target.Sample_Position
+        (Position      => Target_Position (Source, Position),
+         Content       => Content,
+         Styled_Cursor => Styled_Cursor);
+   end Sample_Position;
+   
+   
+   ----------------------------------------
+   procedure Wide_Sample_Position 
+     (Source       : in out Frame;
+      Position     : in     Cursor_Position;
+      Content      :    out Wide_Graphic_Character;
+      Styled_Cursor: in out Cursor'Class)
+   is begin
+      Source.Target.Wide_Sample_Position
+        (Position      => Target_Position (Source, Position),
+         Content       => Content,
+         Styled_Cursor => Styled_Cursor);
+   end Wide_Sample_Position;
+   
+   
+   ----------------------------------------
+   function Sample_Position_Cursor (Source  : in out Frame;
+                                    Position: in     Cursor_Position)
+                                   return Cursor'Class
+   is begin
+      return Source.Target.Sample_Position_Cursor 
+        (Target_Position (Source, Position));
+   end Sample_Position_Cursor;
    
    
    ----------------

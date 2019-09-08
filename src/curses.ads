@@ -448,6 +448,10 @@ package Curses is
       is abstract;
    -- Clears the selected Row(s)
    
+   procedure Clear_Row (The_Surface: in out Surface'Class);
+   -- Clears the row on which the The_Surface.Current_Cursor is positioned
+   
+   
    procedure Clear_Column (The_Surface: in out Surface;
                            Column     : in     Cursor_Ordinal)
       is abstract;
@@ -457,6 +461,9 @@ package Curses is
                             Last_Column : in     Cursor_Ordinal)
       is abstract;
    -- Clears the selected Column(s)
+   
+   procedure Clear_Column (The_Surface: in out Surface'Class);
+   -- Clears the column on which The_Surface.Current_Cursor is positioned
    
 
    procedure Clear_To_End (The_Surface: in out Surface;
@@ -721,6 +728,46 @@ package Curses is
    -- * Curses_Library     : - Wide_Set_Border not supported,
    --                          and no substitution fallback specified; or,
    --                        - Any unexpected internal error or exception
+   
+   procedure Sample_Position
+     (Source       : in out Surface;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Character;
+      Styled_Cursor: in out Cursor'Class)
+     is abstract;
+   
+   procedure Wide_Sample_Position 
+     (Source       : in out Surface;
+      Position     : in     Cursor_Position;
+      Content      :    out Wide_Graphic_Character;
+      Styled_Cursor: in out Cursor'Class)
+     is abstract;
+   
+   function Sample_Position_Cursor (Source  : in out Surface;
+                                    Position: in     Cursor_Position)
+                                   return Cursor'Class
+     is abstract;
+   -- Samples a Character and it's style from a specific position on a Surface.
+   --
+   -- Sample_Cursor allows for the initialization of a Cursor'Class object to
+   -- the most capable derrivation for the Surface.
+   --
+   -- If the Surface does not support Wide_Characters, Wide_Sample simply
+   -- sets Character to a Wide_Character that corresponds to a Character.
+   --
+   -- Styled_Cursor is of mode in out since Sample_Position cannot be expected
+   -- to have full knowledge of the Cursor type passed to is, and so cannot
+   -- ensure full initialization. At a minimum Sample_Position sets
+   -- Styled_Cursor.Position to Position, and Styled_Cursor.Style appropriately
+   --
+   -- If the particular override has knoweldge of additional Cursor types, it
+   -- may configure those aspects separately
+   --
+   -- -- All Possible Exceptions --
+   -- *  Surface_Unavailable: Source is not available
+   -- *  Cursor_Excursion   : Position is beyond Source.Extents
+   -- *  Curses_Library     : Any unexpected internal error
+                              
    
      
    procedure Transcribe (Source : in out Surface;

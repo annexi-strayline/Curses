@@ -272,6 +272,24 @@ package Curses.Frames is
                                          return Character := null);
    
    overriding
+   procedure Sample_Position
+     (Source       : in out Frame;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Character;
+      Styled_Cursor: in out Cursor'Class);
+   
+   procedure Wide_Sample_Position 
+     (Source       : in out Frame;
+      Position     : in     Cursor_Position;
+      Content      :    out Wide_Graphic_Character;
+      Styled_Cursor: in out Cursor'Class);
+   
+   function Sample_Position_Cursor (Source  : in out Frame;
+                                    Position: in     Cursor_Position)
+                                   return Cursor'Class;
+   
+   
+   overriding
    procedure Transcribe (Source : in out Frame;
                          Target : in out Surface'Class;
                          From   : in     Cursor'Class;

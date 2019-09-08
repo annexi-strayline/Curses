@@ -43,6 +43,8 @@
 
 -- No Wide support configuration
 
+with Ada.Characters.Conversions;
+
 with Curses.Binding.Render.Wide;
 
 package body Curses.Binding.Color.Wide is
@@ -75,5 +77,29 @@ package body Curses.Binding.Color.Wide is
       raise Curses_Library with
         "Wide character/string support is not configured";
    end Wide_Set_Colored_Border;
+   
+   
+   --------------------------
+   -- Wide_Query_Character --
+   --------------------------
+   procedure Wide_Query_Character
+     (Handle  : in     Surface_Handle;
+      Position: in     Cursor_Position;
+      C       :    out Wide_Character;
+      Style   :    out Cursor_Style;
+      Color   :    out CURSES_Color_Pair)
+   is
+      use Ada.Characters.Conversions;
+      
+      Temp: Character;
+   begin
+      Query_Character (Handle   => Handle,
+                       Position => Position,
+                       C        => Temp,
+                       Style    => Style,
+                       Color    => Color);
+      
+      C := To_Wide_Character (Temp);
+   end Wide_Query_Character;
    
 end Curses.Binding.Color.Wide;

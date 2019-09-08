@@ -1141,6 +1141,150 @@ package body Curses.Terminals.Surfaces is
    end Wide_Set_Border;
    
    
+   ---------------------
+   -- Sample_Position --
+   ---------------------
+   generic
+      type Graphic_Char_Type is (<>);
+      with procedure Sample_Position_Dispatch
+        (Handle       : in     Surface_Handle;
+         Position     : in     Cursor_Position;
+         Content      :    out Graphic_Char_Type;
+         Styled_Cursor: in out Curses.Terminals.Color.Colored_Cursor'Class);
+   
+   procedure Generic_Sample_Position
+     (Source       : in out Terminal_Surface'Class;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Char_Type;
+      Styled_Cursor: in out Cursor'Class);
+   
+   
+   procedure Generic_Sample_Position
+     (Source       : in out Terminal_Surface'Class;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Char_Type;
+      Styled_Cursor: in out Cursor'Class)
+   is
+      use Curses.Terminals.Color;
+      
+      Temp_Cursor: Colored_Cursor;
+   begin
+      if not Source.Available then
+         raise Surface_Unavailable;
+      elsif Position > Source.Extents then
+         raise Cursor_Excursion;
+      end if;
+      
+      -- In order to get the color of the samples position, we need
+      -- to defer the bulk of the work to the Color package
+      Sample_Position_Dispatch
+        (Handle        => Source.Handle,
+         Position      => Position,
+         Content       => Content,
+         Styled_Cursor => Temp_Cursor);
+      
+      Styled_Cursor.Position := Position;
+      Styled_Cursor.Style    := Temp_Cursor.Style;
+      
+      if Styled_Cursor in Colored_Cursor'Class then
+         Colored_Cursor (Styled_Cursor).Color := Temp_Cursor.Color;
+      end if;
+      
+   exception
+      when Surface_Unavailable | Cursor_Excursion =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Generic_Sample_Position;
+   
+   
+   ----------------------------------------
+   overriding
+   procedure Sample_Position
+     (Source       : in out Terminal_Surface;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Character;
+      Styled_Cursor: in out Cursor'Class)
+   is
+      procedure Sample_Position_Actual is
+        new Generic_Sample_Position 
+          (Graphic_Char_Type        
+             => Graphic_Character,
+           Sample_Position_Dispatch 
+             => Curses.Terminals.Color.Colored_Sample_Position)
+        with Inline;
+   begin
+      Sample_Position_Actual (Source        => Source,
+                              Position      => Position,
+                              Content       => Content,
+                              Styled_Cursor => Styled_Cursor);
+   end Sample_Position;
+   
+   
+   -- Wide Support ------------------------
+   overriding
+   procedure Wide_Sample_Position 
+     (Source       : in out Terminal_Surface;
+      Position     : in     Cursor_Position;
+      Content      :    out Wide_Graphic_Character;
+      Styled_Cursor: in out Cursor'Class)
+   is
+      procedure Sample_Position_Actual is
+        new Generic_Sample_Position 
+          (Graphic_Char_Type
+             => Wide_Graphic_Character,
+           Sample_Position_Dispatch 
+             => Curses.Terminals.Color.Wide_Colored_Sample_Position)
+        with Inline;
+   begin
+      Sample_Position_Actual (Source        => Source,
+                              Position      => Position,
+                              Content       => Content,
+                              Styled_Cursor => Styled_Cursor);
+   end Wide_Sample_Position;
+   
+   
+   ----------------------------
+   -- Sample_Position_Cursor --
+   ----------------------------
+   overriding
+   function Sample_Position_Cursor (Source  : in out Terminal_Surface;
+                                    Position: in     Cursor_Position)
+                                   return Cursor'Class
+   is 
+      use Curses.Terminals.Color;
+      
+      Test_Cursor: Colored_Cursor;
+      Discard    : Wide_Graphic_Character;
+   begin
+      -- In the case of Terminal_Surface'Class, the only supported sampling
+      -- cursors are Cursor and Colored_Cursor. Therefore we can call
+      -- Sample_Position with a Colored_Cursor and see if we get
+      -- Default_Color_Style, in which case we can safely recommend a regular
+      -- Cursor
+      
+      Source.Wide_Sample_Position (Position      => Position,
+                                   Content       => Discard,
+                                   Styled_Cursor => Test_Cursor);
+      -- We call Wide_Sample_Position regardless of if we have Wide_Support or
+      -- not. This is because if we are looking at a wide character, and we
+      -- make the regular call, it probably will come back as non-graphic
+      -- (and thus an exception is raised). Wide_Sample_Position, however,
+      -- works in either case.
+      
+      if Test_Cursor.Color = Default_Color_Style then
+         return Cursor'(Cursor (Test_Cursor));
+         -- We specifically want to return a new Cursor, not a view of
+         -- Cursor'Class, which would still be a Colored_Cursor!
+      else
+         return Test_Cursor;
+      end if;
+      
+   end Sample_Position_Cursor;
+   
+   
    ----------------
    -- Transcribe --
    ----------------

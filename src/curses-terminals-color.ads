@@ -467,7 +467,31 @@ package Curses.Terminals.Color is
    -- -- All Possible Exceptions --
    -- *  Curses_Library: Unable to apply style, wide support not configured, 
    --                    or other unexpected error
-
+   
+   
+   -----------------------------
+   -- Colored_Sample_Position --
+   -----------------------------
+   -- These procedures are to support Terminals.Surfaces for implementation of
+   -- the Sample_Position Surface operations, since the actual color style
+   -- details (and the ability to interface with the ncurses library) is hidden
+   -- in this package
+   
+   procedure Colored_Sample_Position
+     (Handle       : in     Surface_Handle;
+      Position     : in     Cursor_Position;
+      Content      :    out Graphic_Character;
+      Styled_Cursor: in out Colored_Cursor'Class);
+   
+   procedure Wide_Colored_Sample_Position
+     (Handle       : in     Surface_Handle;
+      Position     : in     Cursor_Position;
+      Content      :    out Wide_Graphic_Character;
+      Styled_Cursor: in out Colored_Cursor'Class);
+   -- Intended to be called from a Surface operation, Handle is not verified to
+   -- be valid, and Styled_Cursor's position is not set (only Style and Color
+   -- are set)
+   
      
 private
    use Curses.Binding.Color;

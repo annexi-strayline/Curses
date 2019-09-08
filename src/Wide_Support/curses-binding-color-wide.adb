@@ -81,6 +81,20 @@ package body Curses.Binding.Color.Wide is
      External_Name => "__binding_curses_meta_wborder_set_color";
    
    
+   procedure CURSES_mvwin_wch (win                 : in     Surface_Handle;
+                               y, x                : in     int;
+                               ch                  :    out wchar_t;
+                               
+                               bold, standout, dim, 
+                               uline, invert, blink:    out unsigned;
+                               
+                               color_pair          :    out short)
+     with
+     Import        => True,
+     Convention    => C,
+     External_Name => "__binding_curses_mvwin_wch";
+   
+   
    ---------------------------------
    -- Wide_Set_Colored_Background --
    ---------------------------------
@@ -135,5 +149,32 @@ package body Curses.Binding.Color.Wide is
                                       BL               => BL,
                                       BR               => BR);
    end Wide_Set_Colored_Border;
+   
+   --------------------------
+   -- Wide_Query_Character --
+   --------------------------
+   procedure Wide_Query_Character
+     (Handle  : in     Surface_Handle;
+      Position: in     Cursor_Position;
+      C       :    out Wide_Character;
+      Style   :    out Cursor_Style;
+      Color   :    out CURSES_Color_Pair)
+   is
+      procedure Wide_Query_Character_Actual is
+        new Generic_Query_Character
+          (Ada_Char_Type          => Wide_Character,
+           C_Char_Type            => wchar_t,
+           To_Ada                 => Interfaces.C.To_Ada,
+           CURSES_generic_mvwinch => CURSES_mvwin_wch)
+        with Inline;
+   begin
+      Wide_Query_Character_Actual
+        (Handle   => Handle,
+         Position => Position,
+         C        => C,
+         Style    => Style,
+         Color    => Color);
+   end Wide_Query_Character;
+   
    
 end Curses.Binding.Color.Wide;

@@ -67,4 +67,12 @@ package Curses.Binding.Color.Wide is
       LS, RS, TS, BS, TL, TR, BL, BR: in Wide_Character);
    -- See the parent package for the non-wide analogue
    
+   procedure Wide_Query_Character 
+     (Handle  : in     Surface_Handle;
+      Position: in     Cursor_Position;
+      C       :    out Wide_Character;
+      Style   :    out Cursor_Style;
+      Color   :    out CURSES_Color_Pair);
+   -- See the parent package for the non-wide analogue
+   
 end Curses.Binding.Color.Wide;

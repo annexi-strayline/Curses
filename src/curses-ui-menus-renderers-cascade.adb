@@ -47,6 +47,7 @@ package body Curses.UI.Menus.Renderers.Cascade is
                         Menu     :         in out Menu_Type'Class)
    is
    begin
+      null;
    end Open_Menu;
    
 end Curses.UI.Menus.Renderers.Cascade;
