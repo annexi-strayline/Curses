@@ -1290,90 +1290,80 @@ package body Curses.Terminals.Surfaces is
    ----------------
    overriding
    procedure Transcribe (Source : in out Terminal_Surface;
-                         Target : in out Surface'Class;
-                         From   : in     Cursor'Class;
-                         To     : in     Cursor'Class;
-                         Rows   : in     Cursor_Ordinal;
-                         Columns: in     Cursor_Ordinal;
-                         Clip   : in     Boolean := False)
+                         Target   : in out Surface'Class;
+                         Source_TL: in     Cursor_Position;
+                         Source_BR: in     Cursor_Position;
+                         Target_TL: in     Cursor_Position;
+                         Clip     : in     Boolean := False)
    is
-      Source_Extents: Cursor_Position := Source.Extents;
-      Target_Extents: Cursor_Position := Target.Extents;
+      -- The class-wide preconditions ensures that Source_TL is
+      -- less than or equal to Source_BR, and that all positions are
+      -- within the extents of their relevant windows
       
-      Region_Addendum: constant Cursor_Position 
-        := (Row => Rows, Column => Columns);
-      
-      Source_Region_Extents: Cursor_Position 
-        := Limit_Add_Positions (Left  => From.Position, 
-                                Right => Region_Addendum);
-      
-      Target_Region_Extents: Cursor_Position 
-        := Limit_Add_Positions (Left  => To.Position, 
-                                Right => Region_Addendum);
-      
-      
+      Target_BR: Cursor_Position
+        := (if Source_BR > Source_TL then 
+              (Row    
+                 => Target_TL.Row + Source_BR.Row - Source_TL.Row,
+               Column 
+                 => Target_TL.Column + Source_BR.Column - Source_TL.Column)
+            else
+               Target_TL);
+        
       -- There are two possible permutations of Transcribe needed to satisfy to
       -- the Surface'Class specification, which requires that we are able to 
       -- Transcribe to any Target of Surface'Class, by using Surface'Class.Put 
       -- if necessary.
       --
       -- We will create two versions, one using a dispatching call to Put, the
-      -- other for native Terminal_Surface'Class targets.
+      -- other with a call to the binding for native Terminal_Surface'Class
+      -- targets.
       
-      -- For non Terminal_Surface'Class Targets
+      
+      -- Indirect_Transcribe --
+      -------------------------
       procedure Indirect_Transcribe with Inline is
          type T_O is new Tasking_Order with null record;
          
+         Column_Count: constant Natural
+           := Natural (Target_BR.Column - Target_TL.Column + 1);
+         
+         Row_Count: constant Cursor_Ordinal 
+           := (Target_BR.Row - Target_TL.Row + 1);
+         
+         Copy_Block: array (1 .. Row_Count) of String (1 .. Column_Count);
+         
+         
+         -- The role of Execute is to simply grab everything from the source
+         -- surface and throw it into Copy_Block. After that's done, we can
+         -- simply make successive calls to Put. This won't be as 
+         -- uninterruptable as the native copy (via the binding), but we must
+         -- not take the risk of calling out to an operation which could end up
+         -- eventually making a call to another Terminal_Surface'Class object.
+         --
+         -- It is
          procedure Execute (Order: in out T_O) is
             use Binding.Render;
-            
-            Copy_String: 
-              String (1 .. Natural 
-                        (From.Position.Column - Source_Extents.Column));
-            
-            Paste_Cursor: Cursor'Class := To;
             
             Copy_Last: Natural;
             
          begin
-            -- Once for each line, we read in a String from the Source, and
-            -- distribute it to the Target.
-            --
-            -- Though in theory the regions are vetted for us already, in the
-            -- rare case that 
-            
-            for I in From.Position.Row .. Source_Extents.Row loop
+            for I in 1 .. Row_Count loop
+               
+               Place_Cursor (Handle   => Source.Handle,
+                             Position => (Row    => Source_TL.Row + I - 1,
+                                          Column => Source_TL.Column));
+               
                Get_String (Handle => Source.Handle,
-                           Buffer => Copy_String,
+                           Buffer => Copy_Block(I),
                            Last   => Copy_Last);
                
-               if Copy_Last < Copy_String'Last then
+               if Copy_Last < Copy_Block(I)'Last then
                   -- Recovered string is not as long as it is supposed to be.
                   -- This should mean that the Source surface size has changed
                   raise Cursor_Excursion with
                     "Source Surface geometry changed during an indirect " & 
                     "transcribe operation";
                end if;
-               
-               declare
-               begin
-                  Target.Put (Set_Cursor => Paste_Cursor,
-                              Content    => Copy_String,
-                              Justify    => Left,
-                              Overflow   => Error);
-               exception
-                  when Cursor_Excursion =>
-                     raise Cursor_Excursion with
-                       "Target Surface geometry changed during an indirect " & 
-                       "transcribe operation";
-                     
-                  when others =>
-                     raise;
-               end;
-               
-               -- Move the "Paste_Cursor" down to the next row
-               Paste_Cursor.Position.Row := Paste_Cursor.Position.Row + 1;
-               
             end loop;
             
          end Execute;
@@ -1382,9 +1372,48 @@ package body Curses.Terminals.Surfaces is
          
       begin
          Source.TTY.Liaison.Assign (Order);
-      
-      end Indirect_Transcribe;
+         -- Copy_Block should now be loaded
          
+         begin
+            for I in 1 .. Row_Count loop
+               Target.Position_Cursor ((Row    => Target_TL.Row + I - 1,
+                                        Column => Target_TL.Column));
+               
+               Target.Put (Content    => Copy_Block(I),
+                           Justify    => Left,
+                           Overflow   => Error);
+            end loop;
+         exception
+            when Cursor_Excursion =>
+               raise Cursor_Excursion with
+                 "Target Surface geometry changed during an indirect " & 
+                 "transcribe operation";
+               
+            when others =>
+               raise;
+         end;
+      end Indirect_Transcribe;
+      
+      
+      -- Direct_Transcribe --
+      -----------------------
+      procedure Direct_Transcribe with Inline is
+      begin
+         -- No real need for a tasking order here, since it is
+         -- one call to the binding
+         
+         Curses.Binding.Render.Copy_Area
+           (From_Handle => Source.Handle,
+            From_TL     => Source_TL,
+            
+            To_Handle   => Terminal_Surface (Target).Handle,
+            To_TL       => Target_TL,
+            To_BR       => Target_BR);
+         
+         Set_Modified (Terminal_Surface'Class (Target));
+      end Direct_Transcribe;
+      
+      
    begin
       -- Verify that both surfaces are active
       if not Source.Available then
@@ -1397,86 +1426,37 @@ package body Curses.Terminals.Surfaces is
          
       end if;
       
-      -- Make sure that the From and To Cursors are within the extents of
-      -- their respective surfaces.
-      if From.Position > Source_Extents then
-         raise Cursor_Excursion with
-           "From Cursor is out of bounds of Source Surface";
-         
-      elsif To.Position > Target_Extents then
-         raise Cursor_Excursion with
-           "To Cursor is out of bounds of Target Surface";
-         
-      end if;
+      -- Precondition has checked the extents
       
-      -- Now we check the extents of the region, and either raise an exception,
-      -- or clip it to fit
-      if Source_Region_Extents > Source_Extents then
-         if Clip then
-
-            
-            if Source_Region_Extents.Row > Source_Extents.Row then
-               Source_Region_Extents.Row := Source_Extents.Row;
+      -- Check if the Target region fits, and see if we're allowed to clip it
+      declare
+         Target_Extents: constant Cursor_Position
+           := Target.Extents;
+      begin
+         if Target_BR > Target_Extents then
+            if Clip then
+               -- Limit to the violating dimensions
+               if Target_BR.Row > Target_Extents.Row then
+                  Target_BR.Row := Target_Extents.Row;
+               end if;
+               
+               if Target_BR.Column > Target_Extents.Column then
+                  Target_BR.Column := Target_Extents.Column;
+               end if;
+               
+            else
+               raise Cursor_Excursion with
+                 "Source region does not fit on Target";
             end if;
-            
-            if Source_Region_Extents.Column > Source_Extents.Column then
-               Source_Region_Extents.Column := Source_Extents.Column;
-            end if;
-            
-         else
-            raise Cursor_Excursion with
-              "Source region does not fit on Source Surface";
          end if;
-         
-      end if;
-      
-      -- If the specified area that we are copying from the Source Surface is 
-      -- larger than what is actually available on the Surface, and we "clip" 
-      -- the Source_Region_Extents, this needs to be carried through to our
-      -- Target_Region_Extents. This is because the actual binding only
-      -- receives the Target's region geometry.
-      
-      Target_Region_Extents 
-        := Limit_Add_Positions 
-             (Left  => To.Position,
-              Right => (Source_Region_Extents - From.Position));
-      
-      
-      if Target_Region_Extents > Target_Extents then
-         if Clip then
-            -- Only clip the parts that actually go out of bounds.
-            -- Check each one separately.
-            
-            if Target_Region_Extents.Row > Target_Extents.Row then
-               Target_Region_Extents.Row := Target_Extents.Row;
-            end if;
-            
-            if Target_Region_Extents.Column > Target_Extents.Column then
-               Target_Region_Extents.Column := Target_Extents.Column;
-            end if;
-            
-         else
-            raise Cursor_Excursion with
-              "Target region does not fit on Target Surface";
-         end if;
-         
-      end if;
-      
+      end;
       
       -- We've finally done all of our checks! This means we have two valid
       -- Regions (From + Source_Region_Extents) and (To +
       -- Target_Region_Extents) For "non-native" Target Surfaces, we can now
       -- safely dispatch to one of the two 
       if Target in Terminal_Surface'Class then
-         Binding.Render.Copy_Area
-           (From_Handle => Source.Handle,
-            From_TL     => From.Position,
-            
-            To_Handle   => Terminal_Surface (Target).Handle,
-            To_TL       => To.Position,
-            To_BR       => Target_Region_Extents);
-         
-         Set_Modified (Terminal_Surface'Class (Target));
+         Direct_Transcribe;
       else
          Indirect_Transcribe;
       end if;
@@ -1488,25 +1468,6 @@ package body Curses.Terminals.Surfaces is
       when e: others =>
          raise Curses_Library with
            "Unexpected exception: " & Exceptions.Exception_Information (e);
-      
-   end Transcribe;
-   
-   ----------------------------------------
-   overriding
-   procedure Transcribe (Source : in out Terminal_Surface;
-                         Target : in out Surface'Class;
-                         Rows   : in     Cursor_Ordinal;
-                         Columns: in     Cursor_Ordinal;
-                         Clip   : in     Boolean := False)
-   is
-   begin
-      Transcribe (Source  => Source,
-                  Target  => Target,
-                  From    => Source.Cursor_State.Get,
-                  To      => Target.Current_Cursor,
-                  Rows    => Rows,
-                  Columns => Columns,
-                  Clip    => Clip);
       
    end Transcribe;
    

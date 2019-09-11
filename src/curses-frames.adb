@@ -1463,13 +1463,12 @@ package body Curses.Frames is
    -- Transcribe --
    ----------------
    overriding
-   procedure Transcribe (Source : in out Frame;
-                         Target : in out Surface'Class;
-                         From   : in     Cursor'Class;
-                         To     : in     Cursor'Class;
-                         Rows   : in     Cursor_Ordinal;
-                         Columns: in     Cursor_Ordinal;
-                         Clip   : in     Boolean := False)
+   procedure Transcribe (Source   : in out Frame;
+                         Target   : in out Surface'Class;
+                         Source_TL: in     Cursor_Position;
+                         Source_BR: in     Cursor_Position;
+                         Target_TL: in     Cursor_Position;
+                         Clip     : in     Boolean := False)
    is
       Extents: constant Cursor_Position := Source.Extents;
       
@@ -1479,67 +1478,32 @@ package body Curses.Frames is
          
       elsif not Target.Available then
          raise Surface_Unavailable with "Target not Available";
-         
-      elsif From.Position > Extents
-        or else 
-        Cursor_Position'(Row    => From.Position.Row    + Rows    - 1,
-                         Column => From.Position.Column + Columns - 1) 
-        > Extents
-      then
-         raise Cursor_Excursion;
-         -- This does not check the target extents, as this will be handled by
-         -- the actual call to the Target's Transcribe
       end if;
       
       declare
          Frame_Offset: constant Cursor_Position := Source.State.Target_TL;
-         Mod_From: Cursor'Class := From;
+         Real_TL: constant Cursor_Position := Source_TL + Frame_Offset - (1,1);
+         Real_BR: constant Cursor_Position := Source_BR + Frame_Offset - (1,1);
       begin
-         Mod_From.Position := Mod_From.Position + Frame_Offset - (1,1);
-         
-         Source.Target.Transcribe (Target  => Target,
-                                   From    => Mod_From,
-                                   To      => To,
-                                   Rows    => Rows,
-                                   Columns => Columns,
-                                   Clip    => Clip);
+         Source.Target.Transcribe (Target    => Target,
+                                   Source_TL => Real_TL,
+                                   Source_BR => Real_BR,
+                                   Target_TL => Target_TL,
+                                   Clip      => Clip);
       end;
       
    exception
-      when Surface_Unavailable | Cursor_Excursion | Curses_Library =>
+      when Assertion_Error | Surface_Unavailable 
+        | Cursor_Excursion | Curses_Library =>
          raise;
          
       when e: others =>
          raise Curses_Library with
            "Unexpected exception: " & Exceptions.Exception_Information (e);
-      
-   end Transcribe;
-   
-   
-   ----------------------------------------
-   overriding procedure Transcribe (Source : in out Frame;
-                                    Target : in out Surface'Class;
-                                    Rows   : in     Cursor_Ordinal;
-                                    Columns: in     Cursor_Ordinal;
-                                    Clip   : in     Boolean := False)
-   is
-   begin
-      
-      Source.Transcribe (Target  => Target,
-                         From    => Source.Current_Cursor,
-                         To      => Target.Current_Cursor,
-                         Rows    => Rows,
-                         Columns => Columns,
-                         Clip    => Clip);
-      
-   exception
-      when Surface_Unavailable | Cursor_Excursion | Curses_Library =>
-         raise;
          
-      when e: others =>
-         raise Curses_Library with
-           "Unexpected exception: " & Exceptions.Exception_Information (e);
-      
    end Transcribe;
+   
+   
+
    
 end Curses.Frames;

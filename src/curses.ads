@@ -213,8 +213,10 @@ package Curses is
       ((Left.Row < Right.Row) and then (Left.Column < Right.Column));
    
    function "<=" (Left, Right: Cursor_Position) return Boolean is
-      ((Left < Right) or else (Left = Right));
-
+     (((Left < Right) or else (Left = Right))
+      or else ((Left.Row = Right.Row) and then (Left.Column < Right.Column))
+      or else ((Left.Row < Right.Row) and then (Left.Column = Right.Column)));
+   
    function ">" (Left, Right: Cursor_Position) return Boolean is
       ((Left.Row > Right.Row) or else (Left.Column > Right.Column));
       
@@ -770,56 +772,39 @@ package Curses is
                               
    
      
-   procedure Transcribe (Source : in out Surface;
-                         Target : in out Surface'Class;
-                         From   : in     Cursor'Class;
-                         To     : in     Cursor'Class;
-                         Rows   : in     Cursor_Ordinal;
-                         Columns: in     Cursor_Ordinal;
-                         Clip   : in     Boolean := False)
-      is abstract;
+   procedure Transcribe (Source   : in out Surface;
+                         Target   : in out Surface'Class;
+                         Source_TL: in     Cursor_Position;
+                         Source_BR: in     Cursor_Position;
+                         Target_TL: in     Cursor_Position;
+                         Clip     : in     Boolean := False)
+     is abstract
+     with Pre'Class => Source_BR >= Source_TL
+                       and then Source_BR <= Source.Extents
+                       and then Target_TL <= Target.Extents;
+
    
-   procedure Transcribe (Source : in out Surface;
-                         Target : in out Surface'Class;
-                         Rows   : in     Cursor_Ordinal;
-                         Columns: in     Cursor_Ordinal;
-                         Clip   : in     Boolean := False)
-     is abstract;
    -- Copies the content from the Source Surface to the Target Surface,
-   -- starting from the From Cursor position, and for the number of Rows and
-   -- Columns specified.
+   -- with the Source region identified with Source_TL (Top-Left), and
+   -- Source_BR (Bottom-Right).
    --
-   -- If no From/To Cursor is specified, the Current Cursor is used form the
-   -- Source and Target Surfaces respectively.
-   --
-   -- If Clip is True, and either the Source or Target cannot contain the
-   -- full rectangle to be transcribed, the rectangle is clipped to the largest
-   -- size that can be accommodated by both the Source and Target. If Clip is
-   -- set to False, a Cursor_Excursion exception will be raised. Note that Clip
-   -- has no effect on the From/To Cursors being out-of-bounds -
-   -- a Cursor_Excursion exception will always be raised
+   -- If Clip is True, and the Target cannot contain the full rectangle to be
+   -- transcribed from source, the source rectangle is clipped to the largest
+   -- size that can be accommodated by both Target. Note that this
+   -- is only possible if Target_TL is within the Target's Extents. 
+   -- If Clip is set to False, a Cursor_Excursion exception will be raised. 
    --
    -- If the Target Surface is not compatible with the Source Surface's
    -- implementation of Transcribe, Transcribe shall directly transfer the
-   -- character content only, using the To Cursor with an appropriate Put
-   -- operation on the Target.
-   --
-   -- Note:
-   -- Due to physical restrictions in the underlying (n)curses library,
-   -- Transcribing between Surfaces attached to different Terminals, where
-   -- Color capabilities do not match, may result in unintended stylistic
-   -- rendering on the Target Surface.
+   -- character content only, using the Current_Cursor of the Target Surface
    --
    -- -- All Possible Exceptions --
+   -- * Assertion_Error    :  Precondition was violated
    -- * Surface_Unavailable: The From or To surface (or both) are not Available
-   -- * Cursor_Excursion   : One of the input Cursors is out of bounds,
-   --                        or the Rows and Columns specified exceeds the 
-   --                        boundaries of the From Surface. This can happen
-   --                        even with Clip => True, if the Target surface is
-   --                        not compatible with Surface, and changed size
-   --                        at a certain critical point in execution. It may
-   --                        also be raised if the From or To cursors exceed
-   --                        the extents of their respective Surface.
+   -- * Cursor_Excursion   : - The Source rectangle could not fit on the Target
+   --                          and Clip was False
+   --                        - Either Source or Target changed size during the
+   --                          operation
    -- * Curses_Library     : Any unexpected internal error or exception
                          
    

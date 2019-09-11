@@ -79,7 +79,7 @@ private package Curses.Layers is
    ------------------------------------
    type Layer_Reference (Reference: not null access Surface'Class) is limited 
      null record
-   with Implicit_Dereference => Reference;
+     with Implicit_Dereference => Reference;
    
    type Rack_Cursor (<>) is private;
    
@@ -91,9 +91,9 @@ private package Curses.Layers is
    
    
    type Rack is tagged limited private
-   with Variable_Indexing => Reference,
-     Default_Iterator  => Iterate,
-     Iterator_Element  => Surface'Class;
+     with Variable_Indexing => Reference,
+          Default_Iterator  => Iterate,
+          Iterator_Element  => Surface'Class;
    
    
    -- Indexing --

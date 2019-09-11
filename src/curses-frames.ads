@@ -290,20 +290,12 @@ package Curses.Frames is
    
    
    overriding
-   procedure Transcribe (Source : in out Frame;
-                         Target : in out Surface'Class;
-                         From   : in     Cursor'Class;
-                         To     : in     Cursor'Class;
-                         Rows   : in     Cursor_Ordinal;
-                         Columns: in     Cursor_Ordinal;
-                         Clip   : in     Boolean := False);
-   
-   overriding
-   procedure Transcribe (Source : in out Frame;
-                         Target : in out Surface'Class;
-                         Rows   : in     Cursor_Ordinal;
-                         Columns: in     Cursor_Ordinal;
-                         Clip   : in     Boolean := False);
+   procedure Transcribe (Source   : in out Frame;
+                         Target   : in out Surface'Class;
+                         Source_TL: in     Cursor_Position;
+                         Source_BR: in     Cursor_Position;
+                         Target_TL: in     Cursor_Position;
+                         Clip     : in     Boolean := False);
    
    
 private

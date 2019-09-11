@@ -54,7 +54,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
    generic
       type Base_Item is limited new Menu_Item_Interface with private;
       
-      type Index_Type is range <>; --private;
+      type Index_Type is range <>;
       Null_Index: in Index_Type;
       -- User-provided Tree indexing type, used for link management
       
