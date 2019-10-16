@@ -321,7 +321,7 @@ package Curses is
    type Surface is abstract limited new Limited_Controlled with private;
    -- The Surface'Class represents 2-dimensional rendered planes which can be
    -- individually operated on, and can be stacked in layered hierarchies.
-
+   
    
    -- Surface Properties --
    ------------------------
@@ -494,8 +494,8 @@ package Curses is
                   Content       : in     String;
                   Justify       : in     Justify_Mode    := Left;
                   Overflow      : in     Overflow_Mode   := Truncate;
-                  Advance_Cursor: in     Boolean         := False)
-     with Pre => (Check_Graphic (Content));
+                  Advance_Cursor: in     Boolean         := False);
+   -- Dispatches to Put with The_Surface.Current_Cursor
    
    -- Wide_String
    procedure Wide_Put
@@ -508,7 +508,7 @@ package Curses is
       Wide_Fallback : access 
         function (Item: Wide_String) return String := null)
      is abstract
-   with Pre'Class => (Wide_Check_Graphic (Content));
+     with Pre'Class => (Wide_Check_Graphic (Content));
    
    procedure Wide_Put
      (The_Surface   : in out Surface'Class;
@@ -517,8 +517,7 @@ package Curses is
       Overflow      : in     Overflow_Mode         := Truncate;
       Advance_Cursor: in     Boolean               := False;
       Wide_Fallback : access 
-        function (Item: Wide_String) return String := null)
-   with Pre => (Wide_Check_Graphic (Content));
+        function (Item: Wide_String) return String := null);
    
    -- Puts the Content at the location of the selected cursor. If no Cursor is 
    -- provided, the selected cursor is the active cursor for the Surface.
@@ -549,13 +548,10 @@ package Curses is
    procedure Fill (The_Surface: in out Surface;
                    Pattern    : in     String;
                    Fill_Cursor: in     Cursor'Class)
-     is abstract
-     with Pre'Class => (for all C of Pattern => C in Graphic_Character);
+     with Pre'Class => (Check_Graphic (Pattern));
    
    procedure Fill (The_Surface: in out Surface'Class;
-                   Pattern    : in     String)
-     with Pre => (for all C of Pattern => C in Graphic_Character);
-   
+                   Pattern    : in     String);
    
    -- Wide_String support
    procedure Wide_Fill (The_Surface  : in out Surface;
@@ -563,18 +559,20 @@ package Curses is
                         Fill_Cursor  : in     Cursor'Class;
                         Wide_Fallback: access 
                           function (Item: Wide_String) return String := null)
-     is abstract
-     with Pre'Class => (for all C of Pattern => C in Wide_Graphic_Character);
+     with Pre'Class => (Wide_Check_Graphic (Pattern));
    
    procedure Wide_Fill (The_Surface  : in out Surface'Class;
                         Pattern      : in     Wide_String;
                         Wide_Fallback: access 
-                          function (Item: Wide_String) return String := null)
-     with Pre => (for all C of Pattern => C in Wide_Graphic_Character);
+                          function (Item: Wide_String) return String := null);
+   
    -- Fills the entire surface with the Pattern provided, starting at
    -- Row 1, Column 1, and proceeding left-right, top-bottom. Styling is
    -- applied by the Fill_Cursor. If no Fill_Cursor, the Current_Cursor of the
    -- Surface is used.
+   --
+   -- Note that Surface comes with an include universal Fill concrete operation
+   -- that fills algorithmically with a call to The_Surface.Put
    --
    -- -- All Possible Exceptions --
    -- * Assertion_Error    : Raised if Pattern contains non-graphic characters

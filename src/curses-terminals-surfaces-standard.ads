@@ -9,7 +9,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -61,8 +61,8 @@ package Curses.Terminals.Surfaces.Standard is
    -- Screen --
    ------------
    type Window is tagged;
-   type Screen (TTY: not null access Terminal'Class) is
-      limited new Rendered_Surface with private;
+   type Screen (TTY: not null access Terminal'Class) 
+     is limited new Rendered_Surface with private;
    -- The Screen type represents both a full-screen Surface, and a notional
    -- context of a children Windows, somewhat similar to the concept of a 
    -- "Desktop" in most graphical window management paradigms. A Screen Surface
@@ -75,6 +75,10 @@ package Curses.Terminals.Surfaces.Standard is
    -- Screens are automatically created and allocated through initialization.
    -- However, new screens are not visible by default, unless
    
+   not overriding
+   function New_Screen (TTY: aliased in out Terminal) return Screen;
+   
+   not overriding
    procedure Auto_Focus (The_Screen: in out Screen);
    -- Forces Auto Focus, which is the default state. Auto Focus always causes
    -- the top-most (Superior) Visible Window of The_Screen to have Focus, or
@@ -83,6 +87,7 @@ package Curses.Terminals.Surfaces.Standard is
    -- Auto_Focus overrides any existing Focus Locks active on the Screen
    -- context and forces the focus mode into Auto_Focus.
    
+   not overriding
    procedure Resize (The_Screen: in out Screen);
    -- Resizes The_Screen according to the reported current size of the
    -- associated terminal.
@@ -91,21 +96,22 @@ package Curses.Terminals.Surfaces.Standard is
    -- *  Curses_Library     : - Any unexpected library error
    --                         - Any unexpected exception
    
-   
    -- Window Creation --
    ---------------------
-   -- See the Window type below for greater detail on the role and behaviour
-   -- of Windows
+   -- See the window type below for greator detail on the role and behaviour of
+   -- Windows
    
+   not overriding
    function  New_Window (On_Screen       : aliased in out Screen;
                          Proposed_Extents:         in     Cursor_Position)
                         return Window'Class;
    
+   not overriding
    function  New_Window (On_Screen       : aliased in out Screen;
                          Top_Left        :         in     Cursor_Position;
                          Proposed_Extents:         in     Cursor_Position)
                         return Window'Class;
-   -- Attempts to open a new window of the size and/or location specified. If
+   -- Attempts to create a new window of the size and/or location specified. If
    -- no position is specified, the Window is centered on the parent Screen.
    --
    -- If provided, Top_Left is a coordinate on the parent Screen, from which
@@ -129,9 +135,11 @@ package Curses.Terminals.Surfaces.Standard is
    -- -- Suppresses All Exceptions --
    
    
-   -- Internal Procedures --
-   -------------------------
-   function  Update (The_Screen: in out Screen) return Cursor;
+   -- Internal Hooks --
+   --------------------
+   not overriding
+   procedure Update (The_Screen     : in out Screen;
+                     Physical_Cursor:    out Cursor);
    -- Invoked automatically by the Terminal refresh task periodically if
    -- The_Screen is currently Visible. Only one Screen is Visible at a time,
    -- per Terminal.
@@ -156,8 +164,9 @@ package Curses.Terminals.Surfaces.Standard is
    -- -- Suppresses All Exceptions --
    
    
-   -- Extention Hooks --
-   ---------------------
+   -- Extention Utilities --
+   -------------------------
+   not overriding
    procedure Window_Input_Intercept (The_Screen: in out Screen) is null;
    -- All Windows created on the Screen will invoke this procedure immediately 
    -- on any call to Window.Input_Key. This can enable extensions of the Screen
@@ -165,7 +174,7 @@ package Curses.Terminals.Surfaces.Standard is
    -- this procedure on extension.
    
    
-   -- Derivation Contracts --
+   -- Derivation Overrides --
    --------------------------
    overriding procedure Superior      (The_Surface: in out Screen);
    overriding procedure Inferior      (The_Surface: in out Screen);
@@ -187,15 +196,53 @@ package Curses.Terminals.Surfaces.Standard is
    ------------
    -- Window --
    ------------
-   type Window (<>) is limited new Rendered_Surface with private;
+   type Window (TTY          : not null access Terminal'Class;
+                Parent_Screen: not null access Screen'Class) 
+     is limited new Rendered_Surface with private;
    -- The Window type represents a specifically-sized window that is associated
    -- with a Screen. Windows maintain an adjustable order in relation to other
    -- Windows of the Screen.
    --
-   -- New Windows are always placed at the Top of the Screen's Window
-   -- hierarchy, but are initialized as not Visible, and not Armed.
+   -- Windows should be created via the Screen's New_Window operation. If
+   -- initailized explicitly, Activate_Window can be used to complete
+   -- activation of the Window object
    
+   
+   not overriding
+   procedure Activate_Window (The_Window      : in out Window;
+                              Proposed_Extents: in     Cursor_Position);
+   
+   not overriding
+   procedure Activate_Window (The_Window      : in out Window;
+                              Top_Left        : in     Cursor_Position;
+                              Proposed_Extents: in     Cursor_Position);
+   -- Attempts to initialize a Window which has been explicitly initialized
+   -- with appropriate TTY and Parent_Screen discriminants.
+   --
+   -- This is intended to allow the correct initialization of extensions of the
+   -- Window type, since an ancestor part of an extension aggregate which is 
+   -- a qualified evaluation of Screen.New_Window would be finalized after
+   -- initialization, and thus removed from the parent Screen's "Window rack",
+   -- and would then become permanently not Visible.
+   --
+   -- Screen.New_Window invokes Activate_Window after appropriately 
+   -- a new Window object
+   --
+   -- If The_Window is already Available, Activate_Window has no effect.
+   --
+   -- If Top_Left is not specified, the Window is opened at the center of the
+   -- parent's screen
+   --
+   -- If Activation_Fails, The_Window is not activated. If Parent_Screen.TTY
+   -- doesn't equal TTY, Activation always fails.
+   --
+   -- -- Suppresses All Exceptions --
+   
+   
+   not overriding
    function Top_Left     (The_Window: in out Window) return Cursor_Position;
+   
+   not overriding
    function Bottom_Right (The_Window: in out Window) return Cursor_Position 
      is (The_Window.Top_Left     + 
          The_Window.Extents      -
@@ -208,8 +255,9 @@ package Curses.Terminals.Surfaces.Standard is
    -- *  Curses_Library     : - Any unexpected library error
    --                         - Any unexpected exception
    
-   procedure Resize (The_Window   : in out Window;
-                     Rows, Columns: in     Cursor_Ordinal);
+   not overriding
+   procedure Resize (The_Window : in out Window;
+                     New_Extents: in     Cursor_Position);
    -- Resizes the Curses_Window
    -- If the new size is smaller, existing data is lost for the regions
    -- that no longer fit in the window.
@@ -218,18 +266,27 @@ package Curses.Terminals.Surfaces.Standard is
    -- *  Curses_Library     : - Any unexpected library error
    --                         - Any unexpected exception
    
+   not overriding
    procedure Move (The_Window: in out Window;
                    Top_Left  : in     Cursor_Position);
-   
    -- Moves the Window to the indicated position 
    --
-   -- -- All Possible Exceptions
-   -- * Surface_Unavailable: Window is not Available
-   -- * Curses_Library     : - Any unexpected library error
-   --                        - Any unexpected exception
+   -- -- Explicit Raises --
+   -- *  Surface_Unavailable: Window is not Available
+
    
+   not overriding
+   procedure Center_On_Screen (The_Window: in out Window);
+   -- Centers the Window on the parent Screen.
+   --
+   -- -- All Possible Exceptions --
+   -- *  Surface_Unavailable: Window is not Available
+   -- *  Curses_Library     : - Any unexpected library error
+   --                         - Any unexpected exception
    
-   function  Same_Screen (A, B: in Window) return Boolean;
+   not overriding
+   function  Same_Screen (A, B: in Window) return Boolean
+     is (A.Parent_Screen = B.Parent_Screen);
    -- Returns True if both Windows share the same parent Screen
    
    
@@ -250,7 +307,7 @@ package Curses.Terminals.Surfaces.Standard is
    
    -- Finalization --
    ------------------
-   overriding procedure Finalize (The_Window: in out Window);
+   overriding procedure Finalize   (The_Window: in out Window);
    
    
 private
@@ -294,18 +351,13 @@ private
    -- Window --
    ------------
    
-   -- Official_Position --
-   -----------------------
-   -- Serialized setting of a Cursor_Position value
-   protected type Official_Position is
-      entry Propose (New_Position: in Cursor_Position);
+   -- Window_Position --
+   ---------------------
+   -- Serialized setting of a Cursor_Position value for the Top-Left of a
+   -- Window on the parent Screen. 
+   protected type Window_Position is
+      procedure Set (New_Position: in Cursor_Position);
       -- Blocks if any proposals are active.
-      
-      procedure Commit;
-      -- Commits the proposed coordinates, and clears the proposal
-      
-      procedure Abandon;
-      -- Discards proposed coordinates, and clears the proposal
       
       function Get return Cursor_Position;
       -- Returns the committed current position
@@ -315,32 +367,24 @@ private
       -- Updated
       
    private
-      Proposal_Active: Boolean := False;
-      Was_Updated    : Boolean := False;
-      
-      Proposed       : Cursor_Position;
-      Current        : Cursor_Position;
-   end Official_Position;
+      Was_Updated: Boolean := False;
+      Current    : Cursor_Position;
+   end Window_Position;
    
    ----------------------------------------
-   type Window (Parent_Screen: not null access Screen'Class;
-                TTY          : not null access Terminal'Class) is 
+   type Window (TTY          : not null access Terminal'Class;
+                Parent_Screen: not null access Screen'Class) is 
       limited new Rendered_Surface (TTY) with
       record
-        Position: Official_Position;
+        Position: Window_Position;
          -- The configured top-left corner position on the actual 
          -- terminal screen
-        
-        Sub_Window_Rack: Rack;
       end record;
    
    overriding 
-   function Input_Key  (The_Surface: in out Window;
-                        Peek       : in     Boolean  := False;
-                        Wait       : in     Boolean  := True)
-                       return Control_Character;
-   
-   function Same_Screen (A, B: in Window) return Boolean is
-      (A.Parent_Screen = B.Parent_Screen);
+   function Input_Key (The_Surface: in out Window;
+                       Peek       : in     Boolean  := False;
+                       Wait       : in     Boolean  := True)
+                      return Control_Character;
    
 end Curses.Terminals.Surfaces.Standard;

@@ -69,10 +69,10 @@ package Curses.UI.Menus is
    -- use-case is having Menu_Items_Types which actually are or contain tasks,
    -- and thus can be self-managing
    
-   function Label_Extents (Item: Menu_Item_Interface)
-                          return Cursor_Ordinal is abstract;
+   function Label_Length (Item: Menu_Item_Interface)
+                         return Cursor_Ordinal is abstract;
    -- What is the minumum Extents for the Canvas in a call to Render_Label
-   -- which would accomodate the Label. T
+   -- which would accomodate the Label.
    
    procedure Render_Label (Item    : in out Menu_Item_Interface;
                            Canvas  : in out Surface'Class;
@@ -105,26 +105,31 @@ package Curses.UI.Menus is
    
    function Hot_Key (Item: Menu_Item_Interface) 
                     return Curses.Terminals.Surfaces.Control_Character
-     is abstract;
+     is abstract
+   with Post'Class => Hot_Key'Result.Class in 
+                      Curses.Terminals.Surfaces.No_Key | 
+                      Curses.Terminals.Surfaces.Graphic;
    -- A hot key is a particular single "Control_Character" which should be
    -- associated with the item to allow direct selection from a keyboard entry
    -- If the item does not have a hot key, it should return a Control_Characrer
    -- with a Class discriminent of No_Key
    --
+   -- The limit of No_Key | Graphic is for some sanity and predictable
+   -- behaviour with hot-keys. Remember that Ctrl and Graphic characters 
+   -- include Alt-combinations. Other keys such as Enter, and the directional
+   -- keys should be reserved for menu navigation.
+   --
    -- Visual indication of the hot key is the responsibility of Render_Label
    
    
-   function Available (Item: Menu_Item_Interface) return Boolean is abstract;
-   -- Shall return True if Item is selectable (ie. False is "grayed-out").
-   
    type After_Execute_Directive is 
-   -- Returned from Execute, tells the menu subsystem what to do following
-   -- Execution
+     -- Returned from Execute, tells the menu subsystem what to do following
+     -- Execution
      (Open_Submenu, -- Item is a submenu which should be rendered 
                     -- (by the caller)
       Update,       -- Re-render Item, but keep the menu open
-      Regenerate,   -- Re-render the entire Menu tree up and including Item
-      Close);       -- Close the menu (entire menu)
+      Close_Menu,   -- Return to parent menu (if any)
+      Close_Tree);  -- Close the entire menu
      
    procedure Execute (Item     : in out Menu_Item_Interface;
                       Directive:    out After_Execute_Directive)
@@ -185,21 +190,6 @@ package Curses.UI.Menus is
       Has_Element => Class_Has_Element);
    
    
-   type Null_Iterator_Type is new Menu_Iterators.Forward_Iterator
-     with null record;
-   
-   overriding function First (Object: Null_Iterator_Type) 
-                             return Menu_Cursor_Type'Class
-     is (Null_Menu_Cursor);
-   
-   overriding function Next  (Object  : Null_Iterator_Type; 
-                              Position: Menu_Cursor_Type'Class)
-                             return Menu_Cursor_Type'Class
-     is (Null_Menu_Cursor);
-     
-   Null_Iterator: constant Null_Iterator_Type := (others => <>);
-   
-   
    -------------------------
    -- Menu_Node_Reference --
    -------------------------
@@ -207,11 +197,10 @@ package Curses.UI.Menus is
      (Ref: not null access Menu_Node_Interface'Class) is null record
      with Implicit_Dereference => Ref;
    
-   
    ---------------
    -- Menu_Type --
    ---------------
-   type Menu_Type is new Controlled with null record
+   type Menu_Type is abstract new Controlled with null record
      with Variable_Indexing => Index,
           Default_Iterator  => Iterate,
           Iterator_Element  => Menu_Node_Interface'Class;
@@ -220,79 +209,17 @@ package Curses.UI.Menus is
      
    function  Index          (Menu  : Menu_Type; 
                              Cursor: Menu_Cursor_Type'Class) 
-                            return Menu_Node_Reference;
+                            return Menu_Node_Reference
+     is abstract;
                        
    function  Iterate        (Menu: Menu_Type) 
-                            return Menu_Iterators.Forward_Iterator'Class
-     is (Null_Iterator);
+                            return Menu_Iterators.Reversible_Iterator'Class
+     is abstract;
      
      
-   function  Item_Count (Menu: Menu_Type) return Natural is (0);
-   -- Returns the current number of items on Menu (not including any Submenus)
+   function  Item_Count (Menu: Menu_Type) return Natural is abstract;
+   -- Returns the current number of items on Menu branch (not including items 
+   -- on Submenus)
      
-   --
-   -- Subjucate Declarations
-   -- 
-     
-   -- Null_Menu --
-   ---------------
-   Null_Menu: constant Menu_Type := (Controlled with others => <>);
-   -- An actual object which may be returned from Menu_Item.Submenu to indicate
-   -- that there exists no submenu
-   
-   
-   -- Null_Menu_Item_Type --
-   -------------------------
-   type Null_Menu_Item_Type is limited new Menu_Node_Interface 
-     with null record;
-   
-   overriding
-   function Label_Extents (Item: Null_Menu_Item_Type)
-                          return Cursor_Ordinal is (1);
-   
-   overriding
-   procedure Render_Label (Item    : in out Null_Menu_Item_Type;
-                           Canvas  : in out Surface'Class;
-                           Selected: in     Boolean)
-     is null;
-   
-   overriding
-   function Hot_Key (Item: Null_Menu_Item_Type)
-                    return Curses.Terminals.Surfaces.Control_Character
-     is (Class => Curses.Terminals.Surfaces.No_Key, others => <>);
-   
-   overriding
-   function Available (Item: Null_Menu_Item_Type) return Boolean 
-     is (False);
-   
-   overriding
-   procedure  Execute (Item     : in out Null_Menu_Item_Type;
-                       Directive:    out After_Execute_Directive)
-     is null;
-   
-   overriding
-   function  Submenu (Item: in out Null_Menu_Item_Type) return Menu_Type'Class
-     is (Null_Menu);
-   
-   Null_Menu_Item: aliased Null_Menu_Item_Type := (others => <>);
-   -- Giving an access to this object is always safe since it contains no data,
-   -- and has the same lifetime as the partition.
-   
-   Null_Menu_Reference: constant Menu_Node_Reference
-     := (Ref => Null_Menu_Item'Access);
-   
-   
-   --
-   -- Completions
-   --
-   
-   ---------------
-   -- Menu_Type --
-   ---------------
-   function  Index (Menu  : Menu_Type; 
-                    Cursor: Menu_Cursor_Type'Class) 
-                   return Menu_Node_Reference
-     is (Null_Menu_Reference);
-
       
 end Curses.UI.Menus;

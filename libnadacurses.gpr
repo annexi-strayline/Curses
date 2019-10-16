@@ -54,6 +54,7 @@ library project libnadacurses is
       ("curses-managed.ads",
        "curses-managed.adb",
        "curses-ui-home_screen.ads");
+
    
    for Library_Name    use "nadacurses";
    for Library_Dir     use "./lib";

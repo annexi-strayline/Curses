@@ -43,8 +43,6 @@
 
 package body Curses.UI.Menus.Standard_Trees.Bounded is
    
-   use type GTE.Tree_Element;
-   
    --------------
    -- Allocate --
    --------------

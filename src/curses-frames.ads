@@ -71,13 +71,7 @@ package Curses.Frames is
                        return Frame;
    -- Sets-up a new Frame on the Target Surface at the position specified by
    -- Top_Left, and with an Extents specified by Proposed_Extents. 
-   
-   function  New_Frame (Target          : not null access Surface'Class;
-                        Margin          : in Cursor_Ordinal)
-                       return Frame;
-   -- Sets-up a new Frame on the Target Surface with a position and size
-   -- computed by the requested Margin size.
-                       
+   --
    -- If the specified parameters cannot be accommodated by the Target Surface,
    -- or the Target Surface is not Available, the new Frame will be initialized
    -- as not Available.
@@ -88,8 +82,6 @@ package Curses.Frames is
                       Top_Left        : in     Cursor_Position;
                       Proposed_Extents: in     Cursor_Position);
    
-   procedure Reframe (The_Frame       : in out Frame;
-                      Margin          : in     Cursor_Ordinal);
    -- Re-configures a Frame to a different location and position on the Target
    -- Surface.
    --
@@ -121,7 +113,7 @@ package Curses.Frames is
    -- If set to True, Assert_Cursor is invoked any time the Current_Cursor is
    -- modified.
    --
-   -- The default setting is False
+   -- The default setting is True
    -- -- Suppresses All Exceptions --
    
    procedure Derive_Cursor (The_Frame: in out Frame);
@@ -198,19 +190,6 @@ package Curses.Frames is
       Advance_Cursor: in     Boolean               := False;
       Wide_Fallback : access 
         function (Item: Wide_String) return String := null);
-   
-   
-   overriding
-   procedure Fill (The_Surface: in out Frame;
-                   Pattern    : in     String;
-                   Fill_Cursor: in     Cursor'Class);
-   
-   overriding
-   procedure Wide_Fill (The_Surface  : in out Frame;
-                        Pattern      : in     Wide_String;
-                        Fill_Cursor  : in     Cursor'Class;
-                        Wide_Fallback: access 
-                          function (Item: Wide_String) return String := null);
    
    
    overriding
@@ -338,7 +317,7 @@ private
       
    private
       Active       : Boolean := False;
-      Assert_Config: Boolean := False;
+      Assert_Config: Boolean := True;
                                       
       Our_Cursor   : Colored_Cursor_Container;
       

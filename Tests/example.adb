@@ -14,13 +14,12 @@ begin
    TTY.Attach;
 
    declare
-      Main_Screen: aliased Screen (TTY'Access);
-      My_Window  : Window'Class 
-        := Main_Screen.New_Window 
-          (Proposed_Extents => (Row => 4, Column => 40));
+      Main_Screen: Screen       := New_Screen (TTY);
+      My_Window  : Window'Class := Main_Screen.New_Window 
+        (Proposed_Extents => (Row => 4, Column => 40));
       
       Input_Char: Control_Character;
-      -- This will be centered on the screen, of size 3x40
+      -- This will be centered on the screen, of size 4x40
       
       Fill_Cursor: Cursor := (Style    => (Inverted => True, others => <>),
                               others   => <>);
@@ -51,7 +50,7 @@ begin
          if Input_Char.Class = Graphic 
            and then My_Window.Current_Cursor.Position < My_Window.Extents 
          then
-            My_Window.Put (Content => String'(1..1 => Input_Char.Key),
+            My_Window.Put (Content        => String'(1..1 => Input_Char.Key),
                            Advance_Cursor => True);
          end if;
       end loop;

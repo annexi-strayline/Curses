@@ -41,56 +41,76 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Curses.Standard;
-with Curses.Frames;
-with Curses.Terminals.Surfaces;
+-- Framed_Window objects allow for the configuration of Window objects with a
+-- distinct border and single Framed canvas of a predetermined size.
 
-package Curses.UI.Menus.Renderers is 
-   
-   subtype Screen is Curses.Standard.Screen;
-   subtype Window is Curses.Standard.Window;
-   subtype Frame  is Curses.Frames.Frame;
-   
-   subtype Control_Class is Curses.Terminals.Surfaces.Control_Class;
-   use all type Control_Class;
-   
-   subtype Control_Character is Curses.Terminals.Surfaces.Control_Character;
-   
-   
-   generic
-      -- Fill is called first, followed by Set_Border when creating a
-      -- new Window
-      with procedure Fill (The_Surface: in out Window'Class)
-        is null;
-      
-      with procedure Set_Border (The_Surface: in out Window'Class;
-                                 Main_Menu  : in     Boolean)
-        is null;
-      -- The "default" Border is an empty border - this can works well if
-      -- a Fill is provided
+with Curses.Standard; use Curses.Standard;
 
-      Vertical_Padding  : in Natural := 0;
-      Horizontal_Padding: in Natural := 0;
-      -- Padding refers to the inside of the border.
-      
-      Top_Clear_On_Main: in Boolean := False;
-      -- If True, it is assumed that the first row of the main menu window
-      -- should be the first useable row (including Vertical_Padding), i.e.
-      -- the top row is set by Set_Border (except for the sides)
-      
-      Horizontal_Fly_Out_Offset: in Integer := 0;
-      Vertical_Fly_Out_Offset  : in Integer := 0;
-   -- Adjusts the relative position of fly-out submenus, with negative
-   -- values being left, and up, respectively.
+package Curses.Frames.Framed_Windows is
    
-   function Generic_Style_And_Frame 
-     (S                  : aliased in out Screen'Class;
-      Main_Menu          :         in     Boolean;
-      Conceptual_Top_Left:         in     Cursor_Position;
-      Required_Extents   :         in     Cursor_Position;
-      Frame_Top_Left     :            out Cursor_Position)
-     return Window'Class;
+   type Framed_Window (<>) is limited new Window with private;
+   
+   not overriding
+   function New_Framed_Window 
+     (On_Screen     : aliased in out Standard.Screen'Class;
+      Top_Padding   :         in     Natural;
+      Bottom_Padding:         in     Natural;
+      Left_Padding  :         in     Natural;
+      Right_Padding :         in     Natural;
+      Frame_Extents :         in     Cursor_Position)
+     return Framed_Window;
+   -- Centered on On_Screen
+   
+   not overriding
+   function New_Framed_Window 
+     (On_Screen      : aliased in out Screen'Class;
+      Top_Padding    :         in     Natural;
+      Bottom_Padding :         in     Natural;
+      Left_Padding   :         in     Natural;
+      Right_Padding  :         in     Natural;
+      Window_Top_Left:         in     Cursor_Position;
+      Frame_Extents  :         in     Cursor_Position)
+     return Framed_Window;
+   -- Window is positioned at Window_Top_Left on On_Screen
    
    
+   not overriding
+   function Get_Frame (FW: aliased in out Framed_Window)
+                      return Frame'Class;
+   -- Returns a Frame sized according to the specified padding.
    
-end Curses.UI.Menus.Renderers;
+   
+   not overriding
+   procedure Repad (The_Window    : in out Framed_Window;
+                    Top_Padding   : in     Natural;
+                    Bottom_Padding: in     Natural;
+                    Left_Padding  : in     Natural;
+                    Right_Padding : in     Natural);
+   -- Adjusts the padding of the of The_Window, and then Resizes it to maintain
+   -- equal extents of the underlying frame. Refit_Frame should be called on
+   -- any existing Frames after executing Repad
+   
+   
+   not overriding
+   procedure Resize_Frame (The_Window       : in out Framed_Window;
+                           New_Frame_Extents: in     Cursor_Position);
+   -- Resizes the Window to accomodate a new Frame size
+   
+   
+   -- Package utilities
+   procedure Refit_Frame (The_Frame : in out Frame'Class);
+   -- Refits The_Frame appropriately if The_Window has been resized.
+   -- If The_Frame does not target a Framed_Window, nothing is done.
+   
+   
+private
+   
+   type Framed_Window is limited new Window with
+      record
+         Top_Padding   : Natural;
+         Bottom_Padding: Natural;
+         Left_Padding  : Natural;
+         Right_Padding : Natural;
+      end record;
+   
+end Curses.Frames.Framed_Windows;

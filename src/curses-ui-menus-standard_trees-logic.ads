@@ -131,11 +131,22 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          
          procedure Next (Index: in Index_Type);
          procedure Prev (Index: in Index_Type);
+         -- Linking within the branch
          
-         function  Sub  return Index_Type;
-         procedure Sub  (Index: in Index_Type);
-         -- Get or set the reference to the first element of a Branch rooted
-         -- at this Element
+         function  Sub_First return Index_Type;
+         function  Sub_Last  return Index_Type;
+         
+         procedure Sub_First (Index: in Index_Type);
+         procedure Sub_Last  (Index: in Index_Type);
+         -- Get or set the reference to the first or last element of a Branch
+         -- rooted at this Element
+         
+         function  Sub_Items return Natural;
+         procedure Sub_Items_Increment;
+         procedure Sub_Items_Decrement;
+         procedure Sub_Items_Clear;
+         -- Manages the count of Submenu items linked from this node
+         
          
          function  Parent return Index_Type;
          procedure Parent (Index: in Index_Type);
@@ -146,6 +157,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          procedure Identity (Tree : in not null Standard_Tree_Access;
                              Index: in Index_Type)
          with Pre => Index /= Null_Index;
+         -- Set the Tree and Index of this Element
          
          function  Tree  return Standard_Tree_Access;
          function  Index return Index_Type;
@@ -159,17 +171,20 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- been properly configured with a call to Identity.
          
       private
-         Active    : Boolean              := False;
-         Refs      : Natural              := 0;
+         Active       : Boolean              := False;
+         Refs         : Natural              := 0;
          
-         Next_Ptr  : Index_Type           := Null_Index;
-         Prev_Ptr  : Index_Type           := Null_Index;
+         Next_Ptr     : Index_Type           := Null_Index;
+         Prev_Ptr     : Index_Type           := Null_Index;
          
-         Sub_Ptr   : Index_Type           := Null_Index;
-         Parent_Ptr: Index_Type           := Null_Index;
+         Sub_First_Ptr: Index_Type           := Null_Index;
+         Sub_Last_Ptr : Index_Type           := Null_Index;
+         Sub_Count    : Natural              := 0;
          
-         Tree_Ptr  : Standard_Tree_Access := null;
-         Self_Ptr  : Index_Type           := Null_Index;
+         Parent_Ptr   : Index_Type           := Null_Index;
+         
+         Tree_Ptr     : Standard_Tree_Access := null;
+         Self_Ptr     : Index_Type           := Null_Index;
          
       end Element_State;
       
@@ -177,25 +192,12 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       ----------------------------------------
       type Tree_Element is tagged;
       
-      function Null_Processor (Item: in out Tree_Element'Class)
-                              return Menu_Type'Class
-        is (Null_Menu);
-      -- This call-back is implemented in Generic_Menu_Tree to store the
-      -- correct call-back function in the instantiation for a given
-      -- tree, such that invoking Submenu on a Tree_Element will invoke
-      -- the tree-specific logic in that package for rending the correct
-      -- Menu_Type, namely one which tracks active references.
-      --
-      -- This callback is key in facilitating recursive iteration of the
-      -- Tree without explicit cursor manipulation (for all Item of Menu ..)
-      
       
       type Tree_Element is limited new Base_Item and Menu_Node_Interface with
          record
             State            : Element_State;
-            Submenu_Processor: not null access function 
-              (Item: in out Tree_Element'Class) return Menu_Type'Class
-                := Null_Processor'Access;
+            Submenu_Processor: access function 
+              (Item: in out Tree_Element'Class) return Menu_Type'Class;
          end record;
       
       -- Submenu --
@@ -304,7 +306,13 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       
       overriding
       function  Iterate (Menu: Menu_Branch) 
-                        return Menu_Iterators.Forward_Iterator'Class;
+                        return Menu_Iterators.Reversible_Iterator'Class;
+      
+      overriding
+      function  Item_Count (Menu: Menu_Branch) return Natural;
+      
+      
+      No_Branch: constant Menu_Branch;
       
       
       ---------------
@@ -399,6 +407,8 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          end record;
       
       
+      No_Branch: constant Menu_Branch := (Menu_Type with others => <>);
+      
       ---------------
       -- Menu_Tree --
       ---------------
@@ -458,9 +468,12 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- precondition
          
          
-         procedure First_In_Branch (Item  : in out GTE.Tree_Element;
-                                    Branch: in     Menu_Branch);
-         -- Atomic operation used by Menu_Tree.Append and .Prepend
+         procedure Branch_Prepend (Item  : in out GTE.Tree_Element;
+                                   Branch: in     Menu_Branch);
+         
+         procedure Branch_Append (Item  : in out GTE.Tree_Element;
+                                  Branch: in     Menu_Branch);
+         -- Atomic operations used by Menu_Tree.Append and .Prepend
          --
          -- Calls Insert_Before with Before set to the first item Branch,
          -- ensuring that the first item in the Branch before Item gets
@@ -536,7 +549,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
                               return Menu_Type'Class
         is (Menu_Branch'(Menu_Type with
                          Tree => Tree'Access, Root => Staging_Branch_Index));
-
+      
       
    end Generic_Menu_Tree;
    

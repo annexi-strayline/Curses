@@ -309,9 +309,8 @@ package body Curses.Terminals is
                if not Screen_Rack.Empty
                  and then Screen_Rack(Top_Layer).Visible
                then
-                  Physical_Cursor 
-                    := Screen'Class
-                      (Screen_Rack(Top_Layer).Reference.all).Update;
+                  Screen'Class(Screen_Rack(Top_Layer).Reference.all).Update
+                    (Physical_Cursor);
                   -- Update is to return us a suggested Physical Cursor which
                   -- assumed the terminal is in Follow_Focus mode, and is
                   -- able to hide the cursor. In any other context, we will

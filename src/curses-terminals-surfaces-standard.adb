@@ -52,41 +52,6 @@ with Curses.Binding.Render;
 
 package body Curses.Terminals.Surfaces.Standard is
    
-   --
-   -- Official_Position Protected Type
-   --
-   
-   protected body Official_Position is
-      
-      entry Propose (New_Position: in Cursor_Position)
-        when not Proposal_Active
-      is
-      begin
-         Proposal_Active := True;
-         Proposed        := New_Position;
-      end Propose;
-      
-      procedure Commit is
-      begin
-         Current         := Proposed;
-         Proposal_Active := False;
-         Was_Updated     := True;
-      end Commit;
-      
-      procedure Abandon is
-      begin
-         Proposal_Active := False;
-      end Abandon;
-      
-      function Get return Cursor_Position is (Current);
-      
-      procedure Updated (State: out Boolean) is
-      begin
-         State       := Was_Updated;
-         Was_Updated := False;
-      end Updated;
-         
-   end Official_Position;
    
    --
    -- General Utilities
@@ -231,8 +196,23 @@ package body Curses.Terminals.Surfaces.Standard is
    end Configure_Screens;
    
    
+   -----------------------
+   -- Compute_Center_TL --
+   -----------------------
+   function Compute_Center_TL (The_Screen      : in out Surface'Class;
+                               Proposed_Extents: in     Cursor_Position) 
+                              return Cursor_Position
+   with Inline is
+      Screen_Extents: constant Cursor_Position := The_Screen.Extents;
+   begin
+      return (Row    => (Screen_Extents.Row / 2) - (Proposed_Extents.Row / 2),
+              Column => (Screen_Extents.Column / 2)
+                - (Proposed_Extents.Column / 2));
+   end Compute_Center_TL;
+   
+   
    --
-   -- Screen Surface Implementation
+   -- Screen Implementation
    -- 
    
    ------------------
@@ -260,13 +240,29 @@ package body Curses.Terminals.Surfaces.Standard is
       end Update_Active;
       
       function  Update_Active return Boolean is (Update_Active_Value);
-      
+   
    end Screen_Modes;
+   
+   
+   ----------------
+   -- New_Screen --
+   ----------------
+   not overriding
+   function New_Screen (TTY: aliased in out Terminal) return Screen
+   is begin
+      return S: Screen := (Rendered_Surface with 
+                           TTY    => TTY'Access, 
+                           others => <>)
+      do
+         S.Initialize;
+      end return;
+   end New_Screen;
    
    
    ----------------
    -- Auto_Focus --
    ----------------
+   not overriding
    procedure Auto_Focus (The_Screen: in out Screen) is
    begin
       if The_Screen.Modes.Focus_Config = Auto then
@@ -286,6 +282,7 @@ package body Curses.Terminals.Surfaces.Standard is
    ------------
    -- Resize --
    ------------
+   not overriding
    procedure Resize (The_Screen: in out Screen) is
       New_Extents:          Cursor_Position;
       Old_Extents: constant Cursor_Position := The_Screen.Extents;
@@ -317,97 +314,53 @@ package body Curses.Terminals.Surfaces.Standard is
    end Resize;
    
    
-   
    ----------------
    -- New_Window --
    ----------------
-   function  New_Window (On_Screen       : aliased in out Screen;
-                         Top_Left        :         in     Cursor_Position;
-                         Proposed_Extents:         in     Cursor_Position)
+   not overriding
+   function New_Window (On_Screen       : aliased in out Screen;
+                        Top_Left        :         in     Cursor_Position;
+                        Proposed_Extents:         in     Cursor_Position)
                         return Window'Class
-   is
-      use Curses.Binding;
-      use Curses.Binding.Render;
-      
-   begin
+   is begin
       -- Go right to a build-in-place
       return The_Window: Window (Parent_Screen => On_Screen'Access,
                                  TTY           => On_Screen.TTY)
       do
-        -- Note that all Surfaces are initialized as neither Visible or Armed.
-        -- The user is always responsible for 
-        
-        -- We *always* add ourselves to the Parent_Screen's Window_Rack, no 
-        -- matter what the situation. This is reversed during finalization.
-        On_Screen.Window_Rack.Prepend (The_Window);
-        
-        if not The_Window.Parent_Screen.Available then
-           return;
-        end if;
-        
-        declare begin
-           The_Window.Handle := Create_Surface
-             (TTY => The_Window.TTY.Handle,
-              Extents  => Proposed_Extents);
-        exception
-           when others =>
-              -- Create_Surface failed.
-              The_Window.Handle := Invalid_Handle;
-              return;
-        end;
-        
-        -- Set the current Extents for the Surface
-        The_Window.Properties.Extents (Proposed_Extents);
-        
-        -- Looks good, set-up the Window position and commit
-        The_Window.Position.Propose (Top_Left);
-        The_Window.Position.Commit;
-        
-      exception
-         when others =>
-            if Handle_Valid (The_Window.Handle) then
-               Destroy_Surface (The_Window.Handle);
-            end if;
-            
+         The_Window.Activate_Window (Top_Left         => Top_Left,
+                                     Proposed_Extents => Proposed_Extents);
       end return;
       
    end New_Window;
    
    ----------------------------------------
-   function  New_Window (On_Screen       : aliased in out Screen;
-                         Proposed_Extents:         in     Cursor_Position)
-                        return Window'Class
+   not overriding
+   function New_Window (On_Screen       : aliased in out Screen;
+                        Proposed_Extents:         in     Cursor_Position)
+                       return Window'Class
    is
       Screen_Extents: constant Cursor_Position := On_Screen.Extents;
       Top_Left      :          Cursor_Position;
    begin
-      
-      -- Our basic job is to calculate the center of the Screen, and then to
-      -- pass it up to the full New_Window as Top_Left
+      return New_Window 
+        (On_Screen        => On_Screen,
+         Top_Left         => Compute_Center_TL 
+                               (The_Screen       => On_Screen,
+                                Proposed_Extents => Proposed_Extents),
+         Proposed_Extents => Proposed_Extents);
+
       
       -- Note that this could lead quite easily lead to to an exception, since
       -- there are a number of Proposed_Extent values that would result in
-      -- a Constraint_Error in the below computations. This is generally
-      -- handled by the exception handler.
-      
-      Top_Left.Row    := (Screen_Extents.Row / 2) - (Proposed_Extents.Row / 2);
-      Top_Left.Column := (Screen_Extents.Column / 2) 
-        - (Proposed_Extents.Column / 2);
-      
-      return New_Window (On_Screen        => On_Screen,
-                         Proposed_Extents => Proposed_Extents,
-                         Top_Left         => Top_Left);
-      
+      -- a Constraint_Error in the Compute_Center_TL computations. In that case
+      -- we can just return an inactive Window.
    exception
       when others =>
-         return Null_Window: Window (Parent_Screen => On_Screen'Access,
-                                     TTY           => On_Screen.TTY)
-         do
-           Invalidate_Handle (Null_Window.Handle);
-           On_Screen.Window_Rack.Prepend (Null_Window);
-         end return;
+         return Window'(Rendered_Surface with 
+                        TTY           => On_Screen.TTY,
+                        Parent_Screen => On_Screen'Access,
+                        others        => <>);
    end New_Window;
-   
    
    
    ------------
@@ -431,8 +384,10 @@ package body Curses.Terminals.Surfaces.Standard is
    --    rendered completely
    --
    -- 4. Set the Focus of the top-most Visible surface, unless focus is locked.
-
-   function Update (The_Screen: in out Screen) return Cursor
+   
+   not overriding
+   procedure Update (The_Screen     : in out Screen;
+                     Physical_Cursor:    out Cursor)
    is
       Screen_Extents    : Cursor_Position := The_Screen.Extents;
       -- This value is often queried. We keep a local copy to avoid excessive 
@@ -455,47 +410,40 @@ package body Curses.Terminals.Surfaces.Standard is
       Need_Evaluate     : Boolean := False; -- We need to re-evaluate 
                                             -- visibilities
       
-      Snapshot_Cursor: Cursor := Cursor'(Visible => False, others => <>);
-      -- The cursor position passed to the Refresh_Controller. The default here
-      -- is the fall-back. It would be a "homed" (1,1) hidden cursor. In
-      -- theory, this shouldn't get returned, and if it does, it's likely
-      -- transitory. Either way, this will be harmless
-      
-      
-      -- Set_Snapshot_Cursor --
+      -- Set_Physical_Cursor --
       -------------------------
       -- This was often repeated code in different sections of the body.
-      -- Basically this is to set Snapshot_Cursor to be the Current_Cursor of
+      -- Basically this is to set Physical_Cursor to be the Current_Cursor of
       -- the "focused" Surface (Window or Screen), we also need to compare it
       -- against the computed Cursor_Visiblity property, as well as adding 
       -- Window.Top_Left for Windows, to get the "real" location
       
-      procedure Set_Snapshot_Cursor
+      procedure Set_Physical_Cursor
         (The_Surface: in out Rendered_Surface'Class)
       with Inline is
       begin
-         Snapshot_Cursor := Cursor (The_Surface.Current_Cursor);
+         Physical_Cursor := Cursor (The_Surface.Current_Cursor);
             
          if not The_Surface.Cursor_Visibility then
             -- Force the cursor hidden
-            Snapshot_Cursor.Visible := False;
+            Physical_Cursor.Visible := False;
          end if;
          
          -- If this is a Window, we need to add the Top_Left to the
-         -- Snapshot_Cursor's position as well
+         -- Physical_Cursor's position as well
          if The_Surface in Window'Class then
-            Snapshot_Cursor.Position  
-              := Snapshot_Cursor.Position                + 
+            Physical_Cursor.Position  
+              := Physical_Cursor.Position                + 
                  Window (The_Surface).Top_Left           -
                  Cursor_Position'(1, 1);
          end if;
          
          -- Lastly, if the Cursor is beyond the Screen_Extents (due to
          -- clipping) it should be forced invisible.
-         if Snapshot_Cursor.Position > Screen_Extents then
-            Snapshot_Cursor.Visible := False;
+         if Physical_Cursor.Position > Screen_Extents then
+            Physical_Cursor.Visible := False;
          end if;
-      end Set_Snapshot_Cursor;
+      end Set_Physical_Cursor;
         
         
       -- Evaluate_Visibility --
@@ -540,7 +488,7 @@ package body Curses.Terminals.Surfaces.Standard is
          -- and accumulate a coverage map.
          for W of The_Screen.Window_Rack loop
             declare
-               This_Window: Window renames Window (W);
+               This_Window: Window'Class renames Window'Class (W);
             begin
                Win_TL := This_Window.Top_Left;
                
@@ -705,12 +653,11 @@ package body Curses.Terminals.Surfaces.Standard is
          
       end Evaluate_Visibility;
       
-   ----------------------------------------   
-   begin
+   begin ----------------------------------------------------------------------
       if The_Screen.Modes.Update_Active
         or else not The_Screen.Visible
       then
-         return Snapshot_Cursor;
+         return;
       end if;
       -- If there is already an Update underway for The_Screen, or else
       -- The_Screen is not actually Visible, then there is nothing to update
@@ -805,7 +752,7 @@ package body Curses.Terminals.Surfaces.Standard is
       begin
          for W of The_Screen.Window_Rack loop
             declare
-               This_Window: Window renames Window (W);
+               This_Window: Window'Class renames Window'Class (W);
             begin
                -- Collect all relevant hints
                This_Window.Properties.Hint_Extents   (Geometry);
@@ -869,6 +816,7 @@ package body Curses.Terminals.Surfaces.Standard is
                   Need_Evaluate := True;
                end if;
             end;
+            
          end loop;
          
          -- Lastly, check the Screen itself. If the Screen is updated, then
@@ -937,7 +885,7 @@ package body Curses.Terminals.Surfaces.Standard is
          -- re-return the current Focused Cursor.
          
          if The_Screen.Focus.Has_Focus then
-            Set_Snapshot_Cursor (The_Screen);
+            Set_Physical_Cursor (The_Screen);
             
          else
             declare
@@ -948,10 +896,10 @@ package body Curses.Terminals.Surfaces.Standard is
 
                for W of The_Screen.Window_Rack loop
                   declare
-                     This_Window: Window renames Window (W);
+                     This_Window: Window'Class renames Window'Class (W);
                   begin
                      if This_Window.Focus.Has_Focus then
-                        Set_Snapshot_Cursor (This_Window);
+                        Set_Physical_Cursor (This_Window);
                         Found_Window := True;
                      end if;
                   end;
@@ -959,7 +907,7 @@ package body Curses.Terminals.Surfaces.Standard is
             
                if not Found_Window then
                   The_Screen.Focus.Has_Focus (True);
-                  Set_Snapshot_Cursor (The_Screen);
+                  Set_Physical_Cursor (The_Screen);
                end if;
             end;
          end if;
@@ -967,7 +915,7 @@ package body Curses.Terminals.Surfaces.Standard is
          The_Screen.Window_Rack.Thaw;
          Window_Rack_Locked := False;
          The_Screen.Modes.Update_Active (False);
-         return Snapshot_Cursor;
+         return;
       end if;
       
       -- Only if we need to
@@ -997,7 +945,7 @@ package body Curses.Terminals.Surfaces.Standard is
          
          for W of reverse The_Screen.Window_Rack loop
             declare
-               This_Window: Window renames Window (W);
+               This_Window: Window'Class renames Window'Class (W);
             begin
                if This_Window.Armed 
                  and then This_Window.Total_Visibility /= Hidden
@@ -1058,8 +1006,8 @@ package body Curses.Terminals.Surfaces.Standard is
                      This_Window.Focus.Has_Focus (False);
                   else
                      -- Otherwise, we assume this is the focused screen, and
-                     -- so we can set-up the Snapshot_Cursor, with visibility
-                     Set_Snapshot_Cursor (This_Window);
+                     -- so we can set-up the Physical_Cursor, with visibility
+                     Set_Physical_Cursor (This_Window);
                      
                   end if;
                end if;
@@ -1078,14 +1026,14 @@ package body Curses.Terminals.Surfaces.Standard is
                -- Search from the top-down
                for W of The_Screen.Window_Rack loop
                   declare
-                     This_Window: Window renames Window (W);
+                     This_Window: Window'Class renames Window'Class (W);
                   begin
                      if This_Window.Visible then
                         This_Window.Focus.Has_Focus (True);
                         Window_Focused := True;
                         
                         -- Also get a snapshot for the physical cursor
-                        Set_Snapshot_Cursor (This_Window);
+                        Set_Physical_Cursor (This_Window);
                         
                         exit;
                      end if;
@@ -1095,7 +1043,7 @@ package body Curses.Terminals.Surfaces.Standard is
                if not Window_Focused then
                   -- The Screen itself has focus
                   The_Screen.Focus.Has_Focus (True);
-                  Set_Snapshot_Cursor (The_Screen);
+                  Set_Physical_Cursor (The_Screen);
                   
                else
                   -- Ensure that the Screen (no-longer) has Focus
@@ -1111,18 +1059,15 @@ package body Curses.Terminals.Surfaces.Standard is
       The_Screen.Window_Rack.Thaw;
       Window_Rack_Locked := False;
       The_Screen.Modes.Update_Active (False);
-      return Snapshot_Cursor;
+      return;
       
    exception
-      when others =>
+      when e: others =>
          The_Screen.Modes.Update_Active (False);
          
          if Window_Rack_Locked then
             The_Screen.Window_Rack.Thaw;
          end if;
-         
-         return Snapshot_Cursor;
-      
    end Update;
    
    --------------
@@ -1449,16 +1394,104 @@ package body Curses.Terminals.Surfaces.Standard is
    
    
    --
-   -- Window Surface Implementation
+   -- Window Implementation
    -- 
    
+   ---------------------
+   -- Window_Position --
+   ---------------------
+   protected body Window_Position is
+      
+      procedure Set (New_Position: in Cursor_Position) is
+      begin
+         Current         := New_Position;
+         Was_Updated     := True;
+      end Set;
+      
+      function Get return Cursor_Position is (Current);
+      
+      procedure Updated (State: out Boolean) is
+      begin
+         State       := Was_Updated;
+         Was_Updated := False;
+      end Updated;
+         
+   end Window_Position;
+   
+   ---------------------
+   -- Activate_Window --
+   ---------------------
+   not overriding
+   procedure Activate_Window (The_Window      : in out Window;
+                              Top_Left        : in     Cursor_Position;
+                              Proposed_Extents: in     Cursor_Position)
+   is begin
+      if The_Window.Available 
+        or else The_Window.TTY /= The_Window.Parent_Screen.TTY
+      then
+         return;
+      end if;
+      
+      -- Note that all Surfaces are initialized as neither Visible or Armed.
+      -- The user is always responsible for showing them.
+      
+      -- We *always* add ourselves to the Parent_Screen's Window_Rack, no 
+      -- matter what the situation. This is reversed during finalization.
+      
+      if not The_Window.Parent_Screen.Available then
+         return;
+      end if;
+      
+      declare begin
+         The_Window.Handle := Curses.Binding.Render.Create_Surface
+           (TTY => The_Window.TTY.Handle,
+            Extents  => Proposed_Extents);
+      exception
+         when others =>
+            -- Create_Surface failed.
+            The_Window.Handle := Invalid_Handle;
+            return;
+      end;
+      
+      -- Set the current Extents for the Surface
+      The_Window.Properties.Extents (Proposed_Extents);
+      
+      -- Looks good, set-up the Window position and commit
+      The_Window.Position.Set (Top_Left);
+      
+      The_Window.Parent_Screen.Window_Rack.Prepend (The_Window);
+      
+   exception
+      when others =>
+         -- We need to return a Window object no matter what, but clearly
+         -- it won't be useable. We can call finalization on the object
+         -- directly to neauralize it. Calling Finalize on an already
+         -- Finalized Window ultimately has no effect
+         The_Window.Finalize;
+         
+         -- This also ensures it is not on the Window_Rack. Though there is
+         -- no real harm in leaving it there, it is not helpful performance-
+         -- wise
+   end Activate_Window;
+   
+   ----------------------------------------------------------------------------
+   not overriding
+   procedure Activate_Window (The_Window      : in out Window;
+                              Proposed_Extents: in     Cursor_Position)
+   is
+   begin
+      The_Window.Activate_Window
+        (Top_Left         => Compute_Center_TL 
+           (The_Screen       => The_Window.Parent_Screen.all,
+            Proposed_Extents => Proposed_Extents),
+         Proposed_Extents => Proposed_Extents);
+   end Activate_Window;
 
-   
-   
    
    --------------
    -- Top_Left --
    --------------
+   not overriding
    function Top_Left (The_Window: in out Window) return Cursor_Position is
    begin
       if not The_Window.Available then
@@ -1472,10 +1505,10 @@ package body Curses.Terminals.Surfaces.Standard is
    ------------
    -- Resize --
    ------------
+   not overriding
    procedure Resize (The_Window   : in out Window;
-                     Rows, Columns: in     Cursor_Ordinal)
+                     New_Extents  : in     Cursor_Position)
    is
-      New_Extents     : Cursor_Position := (Row => Rows, Column => Columns);
       Old_Extents     : Cursor_Position := The_Window.Extents;
       New_Bottom_Right: Cursor_Position 
         := The_Window.Top_Left + New_Extents - Cursor_Position'(1,1);
@@ -1494,8 +1527,8 @@ package body Curses.Terminals.Surfaces.Standard is
       
       procedure Do_Resize 
         (Handle   : in Surface_Handle := The_Window.Handle;
-         R_Rows   : in Cursor_Ordinal := Rows;
-         R_Columns: in Cursor_Ordinal := Columns)
+         R_Rows   : in Cursor_Ordinal := New_Extents.Row;
+         R_Columns: in Cursor_Ordinal := New_Extents.Column)
         renames Binding.Render.Resize;
       
    begin
@@ -1531,6 +1564,7 @@ package body Curses.Terminals.Surfaces.Standard is
    ----------
    -- Move --
    ----------
+   not overriding
    procedure Move (The_Window: in out Window;
                    Top_Left  : in     Cursor_Position)
    is
@@ -1539,26 +1573,26 @@ package body Curses.Terminals.Surfaces.Standard is
       -- Window - specific "Position" property. The Screen.Update subprogram 
       -- will handle the actual rendering details.
       
-      The_Window.Position.Propose (Top_Left);
-      
       if not The_Window.Available then
          raise Surface_Unavailable;
       end if;
-
-      The_Window.Position.Commit;
       
+      The_Window.Position.Set (Top_Left);
       Decide_Queue_Refresh (The_Window);
-      
-   exception
-      when Surface_Unavailable | Cursor_Excursion | Curses_Library =>
-         The_Window.Position.Abandon;
-         raise;
-         
-      when e: others =>
-         The_Window.Position.Abandon;
-         raise Curses_Library with
-           "Unexpected exception: " & Exceptions.Exception_Information (e);  
    end Move;
+   
+   
+   ----------------------
+   -- Center_On_Screen --
+   ----------------------
+   not overriding
+   procedure Center_On_Screen (The_Window: in out Window) is
+   begin
+      The_Window.Move (Compute_Center_TL 
+                         (The_Screen       => The_Window.Parent_Screen.all,
+                          Proposed_Extents => The_Window.Extents));
+   end Center_On_Screen;
+   
    
    --------------
    -- Superior --
@@ -1687,7 +1721,7 @@ package body Curses.Terminals.Surfaces.Standard is
       when others => null;
    end Release_Focus;
    
-
+   
    --------------
    -- Finalize --
    --------------
@@ -1701,9 +1735,9 @@ package body Curses.Terminals.Surfaces.Standard is
       -- requires that we invoke an Update on the Screen with the Window
       -- Withdrawn, if it is Visible.
       
-      -- Wait for any active Update to finish, and then prevent further Updates
       The_Window.Parent_Screen.Window_Rack.Freeze;
       Rack_Locked := True;
+      -- Wait for any active Update to finish, and then prevent further Updates
       
       Was_Visible := The_Window.Visible;
       -- Remember that only the Screen's Update subprogram actually sets a
@@ -1730,7 +1764,7 @@ package body Curses.Terminals.Surfaces.Standard is
          declare
             Discard: Cursor;
          begin
-            Discard := The_Window.Parent_Screen.Update;
+            The_Window.Parent_Screen.Update (Discard);
          end;
          
          -- Also register for an actual Refresh
@@ -1743,6 +1777,7 @@ package body Curses.Terminals.Surfaces.Standard is
       
       -- That's all for our bit.
       Rendered_Surface (The_Window).Finalize;
+      
    exception
       when others =>
          if Rack_Locked then

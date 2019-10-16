@@ -54,7 +54,8 @@ package Curses.Terminals.Surfaces is
    ----------------------
    -- Terminal_Surface --
    ----------------------
-   type Terminal_Surface (<>) is abstract limited new Surface with private;
+   type Terminal_Surface (TTY: not null access Terminal'Class) 
+     is abstract limited new Surface with private;
    -- Represents a generic Surface object which is directly associated with
    -- a Terminal object
    
@@ -136,18 +137,6 @@ package Curses.Terminals.Surfaces is
       Wide_Fallback : access 
         function (Item: Wide_String) return String := null);
    
-   
-   overriding
-   procedure Fill (The_Surface: in out Terminal_Surface;
-                   Pattern    : in     String;
-                   Fill_Cursor: in     Cursor'Class);
-   
-   overriding
-   procedure Wide_Fill (The_Surface  : in out Terminal_Surface;
-                        Pattern      : in     Wide_String;
-                        Fill_Cursor  : in     Cursor'Class;
-                        Wide_Fallback: access 
-                          function (Item: Wide_String) return String := null);
    
 
    overriding
@@ -470,8 +459,7 @@ private
       Soft); -- Surface can be updated (changes only)
    
    ----------------------------------------
-   type Rendered_Surface (TTY: not null access Terminal'Class) is
-      abstract limited new Terminal_Surface (TTY) with
+   type Rendered_Surface is abstract limited new Terminal_Surface with
       record
          Focus: Focus_State;
          

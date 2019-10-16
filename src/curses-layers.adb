@@ -556,7 +556,7 @@ package body Curses.Layers is
       when Lock = 0 is
       begin
          -- If The_Layer is already Superior, don't waste any time
-         if The_Layer.Prev = null then
+         if The_Layer.Prev /= null then
             -- Really a Remove followed by a Prepend
             Remove_Actual  (The_Layer);
             Prepend_Actual (The_Layer);
@@ -578,7 +578,7 @@ package body Curses.Layers is
       when Lock = 0 is
       begin
          -- If The_Layer is already Inferior, don't waste any time
-         if The_Layer.Next = null then
+         if The_Layer.Next /= null then
             -- Really a Remove followed by an Append
             Remove_Actual (The_Layer);
             Append_Actual (The_Layer);

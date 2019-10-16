@@ -208,9 +208,156 @@ package body Curses is
    end Wide_Put;
    
    
-   ----------
+   -------------------
+   -- Fill Concrete --
+   -------------------
+   
+   -- Generic_Fill --
+   ------------------
+   generic
+      type Character_Type is (<>);
+      type String_Type    is array (Positive range <>) of Character_Type;
+      
+      with procedure Dispatch_Put (The_Surface: in out Surface'Class;
+                                   Set_Cursor : in out Cursor'Class;
+                                   Content    : in     String_Type);
+      -- Shall use Overflow => Wrap_Truncate
+   procedure Generic_Fill (The_Surface: in out Surface'Class;
+                           Pattern    : in     String_Type;
+                           Fill_Cursor: in     Cursor'Class);
+   
+   ----------------------------------------------------------
+   procedure Generic_Fill (The_Surface: in out Surface'Class;
+                           Pattern    : in     String_Type;
+                           Fill_Cursor: in     Cursor'Class)
+   is
+      Extents: constant Cursor_Position := The_Surface.Extents;
+   begin
+      if not The_Surface.Available then
+         raise Surface_Unavailable;
+      end if;
+      
+      declare
+         Use_Cursor: Cursor'Class := Fill_Cursor;
+         Expanded_Pattern: String_Type 
+           (1 .. Positive (Extents.Row * Extents.Column));
+      begin
+         -- Home the cursor
+         Use_Cursor.Position := (1,1);
+         
+         -- If Pattern is larger than the available area, then we truncate
+         -- to fit, otherwise, we need to fill it out
+         if Pattern'Length > Expanded_Pattern'Length then
+            Expanded_Pattern 
+              := Pattern (Pattern'First .. 
+                            Pattern'First + Expanded_Pattern'Length - 1);
+            
+         else
+            declare
+               First: Positive := Expanded_Pattern'First;
+               Last : Positive := First + Pattern'Length - 1;
+            begin
+               loop
+                  if Last > Expanded_Pattern'Last then
+                     -- This is the last bit of the pattern. Fit what we can.
+                     Expanded_Pattern(First .. Expanded_Pattern'Last)
+                       := Pattern(Pattern'First .. 
+                                    Pattern'First + 
+                                    (Expanded_Pattern'Last - First));
+                     
+                     exit;
+                  end if;
+                  
+                  Expanded_Pattern(First .. Last) := Pattern;
+                  
+                  First := Last + 1;
+                  
+                  exit when First > Expanded_Pattern'Last;
+                  
+                  Last  := First + Pattern'Length - 1;
+               end loop;
+            end;
+            
+         end if;
+         
+         Dispatch_Put (The_Surface => The_Surface,
+                       Set_Cursor  => Use_Cursor,
+                       Content     => Expanded_Pattern);
+      end;
+      
+   exception
+      when Assertion_Error | Surface_Unavailable | Curses_Library =>
+         raise;
+         
+      when e: others =>
+         raise Curses_Library with
+           "Unexpected exception: " & Exceptions.Exception_Information (e);
+   end Generic_Fill;
+
+   
    -- Fill --
    ----------
+   procedure Fill (The_Surface: in out Surface;
+                   Pattern    : in     String;
+                   Fill_Cursor: in     Cursor'Class)
+   is
+      procedure Dispatch_Put (The_Surface: in out Surface'Class;
+                              Set_Cursor : in out Cursor'Class;
+                              Content    : in     String)
+      with Inline is
+      begin
+         The_Surface.Put (Set_Cursor => Set_Cursor,
+                          Content    => Content,
+                          Overflow   => Wrap_Truncate);
+      end Dispatch_Put;
+      
+      procedure Fill_Actual is new Generic_Fill
+        (Character_Type => Character,
+         String_Type    => String,
+         Dispatch_Put   => Dispatch_Put)
+        with Inline;
+   begin
+      Fill_Actual (The_Surface => The_Surface,
+                   Pattern     => Pattern,
+                   Fill_Cursor => Fill_Cursor);
+      
+   end Fill;
+   
+   
+   -- Wide_Fill --
+   ---------------
+   procedure Wide_Fill (The_Surface  : in out Surface;
+                        Pattern      : in     Wide_String;
+                        Fill_Cursor  : in     Cursor'Class;
+                        Wide_Fallback: access 
+                          function (Item: Wide_String) return String := null)
+   is
+      procedure Dispatch_Put (The_Surface: in out Surface'Class;
+                              Set_Cursor : in out Cursor'Class;
+                              Content    : in     Wide_String)
+      with Inline is
+      begin
+         The_Surface.Wide_Put (Set_Cursor    => Set_Cursor,
+                               Content       => Content,
+                               Overflow      => Wrap_Truncate,
+                               Wide_Fallback => Wide_Fallback);
+      end Dispatch_Put;
+      
+      procedure Wide_Fill_Actual is new Generic_Fill
+        (Character_Type => Wide_Character,
+         String_Type    => Wide_String,
+         Dispatch_Put   => Dispatch_Put)
+        with Inline;
+   begin
+      Wide_Fill_Actual (The_Surface => The_Surface,
+                        Pattern     => Pattern,
+                        Fill_Cursor => Fill_Cursor);
+      
+   end Wide_Fill;
+
+   ---------------------
+   -- Fill Class-Wide --
+   ---------------------
    procedure Fill (The_Surface: in out Surface'Class;
                    Pattern    : in     String)
    is
