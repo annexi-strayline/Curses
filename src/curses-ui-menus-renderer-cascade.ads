@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2020, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2019, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -41,42 +41,75 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
--- This package provides a standard implementation Standard_Tree with bounded
--- storage.
---
--- Refer to the parent Standart_Trees package for a full interface listing of
--- the Standard_Tree interface.
-
-with System.Storage_Elements;
-
-private with Curses.UI.Menus.Standard_Trees.Implementation;
-private with Curses.UI.Menus.Standard_Trees.Storage_Pools.Bounded;
+with Curses.Standard;              use Curses.Standard;
+with Curses.Frames.Framed_Windows; use Curses.Frames.Framed_Windows;
 
 generic
-   type Base_Item is limited new Menu_Item_Interface with private;
-   Max_Items: in Positive;
-   -- The maximum number of items per tree object
+   with function  Frame_And_Style
+     (On_Screen    : aliased in out Screen'Class;
+      Root_Item    :         in     Menu_Cursor_Type'Class;
+      Frame_Extents:         in     Cursor_Position;
+      TL_Hint      :         in     Cursor_Position)
+     return Framed_Window'Class;
+   -- Called when opening a given Submenu to set up a Framed_Window that
+   -- should (if applicable) accomodate a Frame of Frame_Extent extents.
+   --
+   -- TL_Hint gives the position relative to On_Screen that represents the
+   -- last column of the parent item for the Submenu. For the first call to
+   -- Cascade
    
-package Curses.UI.Menus.Standard_Trees.Bounded is
+   with procedure Configure_Renderer (Renderer: in out Menu_Renderer'Class)
+     is null;
+   -- Called when creating a new Menu_Renderer object for rendering the next
+   -- submenu, to correctly configure that renderer before it is used
    
-   type Bounded_Menu_Tree is limited new Standard_Tree
-     with private;
-   -- All Standard_Tree operations, including indexing, always refer to
-   -- underlying items of Base_Item'Class
    
-private
+   -- Defaults for the relevant parameters. 
+   Default_Min_Width: in Cursor_Ordinal := 1;
+   Default_Max_Width: in Cursor_Ordinal := Cursor_Ordinal'Last;
    
-   package BSP is new Standard_Trees.Storage_Pools.Bounded
-     (Unit             => Base_Item,
-      Subpool_Capacity => Max_Items);
+   Default_Min_Height: in Cursor_Ordinal := 1;
+   Default_Max_Height: in Cursor_Ordinal := Cursor_Ordinal'Last;
+
+   Default_Scrollbar_Provision: in Natural := 0;
    
-   -- Implementation
+   -- Algorithm Configuration
+   Left_Right_Navigation: in Boolean := True;
+   -- When True, Right_Key will open a submenu if available. Left_Key will 
+   -- close the currently open Submenu
+
+   Hide_Parent: in Boolean := False;
+   -- When True, the parent Submenu will be hidden when opening a child Submenu
+
+
+procedure Curses.UI.Menus.Renderer.Cascade
+  (On_Screen : aliased in out Screen'Class;
+   Branch    : aliased in out Menu_Type'Class;
    
-   package GTI is new Standard_Trees.Implementation.Generic_Tree
-     (Base_Item      => Base_Item,
-      Subpool_Object => BSP.Bounded_Tree_Subpool);
+   Min_Width : in Cursor_Ordinal := Default_Min_Width;
+   Max_Width : in Cursor_Ordinal := Default_Max_Width;
    
-   type Bounded_Menu_Tree is limited new GTI.Menu_Tree
-     with null record;
+   Min_Height: in Cursor_Ordinal := Default_Min_Height;
+   Max_Height: in Cursor_Ordinal := Default_Max_Height;
    
-end Curses.UI.Menus.Standard_Trees.Bounded;
+   Scrollbar_Provision: in Natural := Default_Scrollbar_Provision);
+-- Cascade opens a cascading menu starting with Branch, on Screen On_Screen.
+--
+-- The Cascade procedure creates and interact Menu_Renderer objects and 
+-- executes selected Items and responds to the After_Execute_Directive.
+--
+-- Cascade returns once a selected Item indicates either Close_Tree, or
+-- Close_Menu if the Item is on the "main" (initial) branch
+--
+-- Min/Max Width/Height
+--
+-- These parameters defines the defaults for the calculated Frame_Extents
+-- parameter passed to Frame_And_Style, which is based on the number of items,
+-- and the longest label, of all Items in a Submenu.
+--
+-- Minimums will always be enforced even if not needed.
+-- Maximums will force a maximum width to Frame_Extents
+--
+-- Scrollbar_Provision
+-- Indicates the number of columns that should be added to the required
+-- Frame_Extents to make room for a Scrollbar.

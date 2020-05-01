@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
+--  Copyright (C) 2018-2020, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -42,6 +42,7 @@
 ------------------------------------------------------------------------------
 
 with Ada.Containers;
+with Ada.Finalization;
 
 package Curses.UI.Menus.Standard_Trees is
    
@@ -52,6 +53,7 @@ package Curses.UI.Menus.Standard_Trees is
    ---------------------
    -- Standard_Cursor --
    ---------------------
+   
    type Standard_Tree   is tagged;
    type Standard_Cursor is new Menu_Cursor_Type with null record;
    -- Standard_Cursor is a special extension of Menu_Cursor_Type with new
@@ -76,19 +78,27 @@ package Curses.UI.Menus.Standard_Trees is
    function Progenitor_Of_Branch (Trial_Progenitor: Standard_Cursor;
                                   Trial_Descendent: Menu_Type'Class) 
                                  return Boolean is (True);
-   -- Returns True if Trial_Progenitor is the root of a Sub that denotes a
-   -- sub-tree which ultimately contains the branch Trail_Descendent. This is
+   -- Returns True if Trial_Progenitor denotes a Submenu that ultimately
+   -- loeads to the menu branch of Trail_Descendent. This is
    -- used to protect Standard_Tree insertion operations from inserting a
-   -- branch root into it's own sub-tree, which would make a black-hole.
+   -- branch root into it's own sub-tree, which would make a black-hole or
+   -- something similar.
    
    -------------------
    -- Standard_Tree --
    -------------------
-   type Standard_Tree is limited interface
-   with Variable_Indexing => Index;
+   
+   type Standard_Tree is abstract limited
+     new Ada.Finalization.Limited_Controlled with private with
+     Variable_Indexing => Index;
    -- Standard_Tree represents a collection of Items and Branches (submenus).
    -- The Standard_Tree provides an implicit "Main_Menu" branch, as well as
    -- allocation and deletion of Items and Branches throughout the Tree.
+   --
+   -- An implementation of Standard_Tree shall reclaim all storage on
+   -- finalization, and shall not depend on all items being Freed explicitly
+   -- in order to do this. The Finalization of Standard_Tree shall not
+   -- require iteration over the tree.
    
    function Index (Tree    : in out Standard_Tree;
                    Position: in     Standard_Cursor'Class)
@@ -97,50 +107,39 @@ package Curses.UI.Menus.Standard_Trees is
    with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
    -- Returns a reference to an actual Item in the tree.
    
-   function Staging_Branch (Tree: aliased in out Standard_Tree)
-                           return Menu_Type'Class
-     is abstract;
-   -- Returns a reference to the Tree's default root branch. All new items
-   -- allocated on the Tree via New_Item are _prepended_ to the Staging_Branch.
-   -- The Staging_Branch is permanent for the life of the associated Tree
-   -- object.
    
    -- Allocation --
-   ----------------
-   function Create (Tree: aliased in out Standard_Tree)
-                   return Standard_Cursor'Class is abstract;
+
+   function New_Item (Tree: aliased in out Standard_Tree)
+                     return Standard_Cursor'Class is abstract;
    -- Allocates a new Menu_Item from Tree, and returns a cursor referencing
-   -- it. New_Items are always appended to the Staging_Branch.
+   -- it.
    
    procedure Delete (Tree    : in out Standard_Tree;
-                     Position: in out Standard_Cursor'Class)
+                     Position: in out Standard_Cursor'Class;
+                     Deleted :    out Boolean)
      is abstract
-   with Pre'Class => Position.Has_Element and then Position.On_Tree (Tree);
-   -- Deletes (deallocates) the Item at Position.
+   with Pre'Class => Position.Has_Element and then 
+                     Position.On_Tree (Tree),
+     Post'Class => (if Deleted then not Position.Has_Element);
+     
+   -- Deletes the Item at Position. 
    --
-   -- If the Position donotes a Submenu, the Submenu is iterated, with
-   -- Delete invoked for each Item of the Submenu, and recursively for any
-   -- Submenus of those Items
+   -- If the item at Position denotes a Submenu, delete is recursively inovoked
+   -- for each item of the submenu.
    --
-   -- The user shall never attempt to Delete an Item which is currently
-   -- referenced, or maintains a sub-tree of Items and Submenus which are also
-   -- currently referenced. All Items are checked for active references. If any
-   -- active references are found, except for the single reference denoting
-   -- Position, Program_Error will be raised. 
+   -- If the item at Position is referenced by more than one cursor at the
+   -- time of deletion, it is not deleted, and Deleted will be False. Position
+   -- will not be modified.
    --
-   -- If the operation fails and Program_Error is raised, all reasonable
-   -- attempts are made to leave the Tree in a consistent state. If the Delete
-   -- only fails due to active references, the Tree is not affected.
+   -- Deletion of the 
    --
    -- -- Explicit Raises --
    -- *  Assertion_Erorr: Precondition violated.
-   -- *  Program_Error  : The user has attempted to Delete an Item which is
-   --                     still referenced, or denotes a sub-tree which
-   --                     contains references
-   
+
    
    -- Manipulation --
-   ------------------
+
    procedure Append (Tree    : in out Standard_Tree;
                      Branch  : in out Menu_Type'Class;
                      Position: in out Standard_Cursor'Class)
@@ -157,10 +156,6 @@ package Curses.UI.Menus.Standard_Trees is
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated
    -- *  Constraint_Error: Branch does not belong to Tree.
-   -- *  Program_Error   : A deadlock occured when trying to insert Position to
-   --                      the end of branch. The attempt was aborted. This
-   --                      indicates runaway modification to items on
-   --                      Branch
    
    procedure Prepend (Tree    : in out Standard_Tree;
                       Branch  : in out Menu_Type'Class;
@@ -215,9 +210,9 @@ package Curses.UI.Menus.Standard_Trees is
    -- -- Explicit Raises --
    -- *  Assertion_Error : Precondition violated
    
-   -- Standard_Tree_Access --
-   --------------------------
-   type Standard_Tree_Access is access all Standard_Tree'Class
-   with Storage_Size => 0;
+private
+   
+   type Standard_Tree is abstract limited
+     new Ada.Finalization.Limited_Controlled with null record;
    
 end Curses.UI.Menus.Standard_Trees;

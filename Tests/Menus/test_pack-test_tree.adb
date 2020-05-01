@@ -1,7 +1,5 @@
 
-with Debug; use Debug;
-
-package body Test_Pack.Bounded_Tree is
+package body Test_Pack.Test_Tree is
    
    procedure Set_Label (Item: in out Menu_Item; Label: in String)
    is
@@ -31,8 +29,7 @@ package body Test_Pack.Bounded_Tree is
    is
       use all type Curses.UI.Menus.After_Execute_Directive;
    begin
-      Debug_Line ("Execute");
-      Directive := Close;
+      Directive := Close_Menu;
    end Execute;
      
-end Test_Pack.Bounded_Tree;
+end Test_Pack.Test_Tree;

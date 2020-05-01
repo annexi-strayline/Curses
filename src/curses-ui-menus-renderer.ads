@@ -113,6 +113,7 @@ package Curses.UI.Menus.Renderer is
    procedure Interaction_Loop 
      (Driver         : in out Menu_Renderer;
       Selected_Item  :    out Menu_Cursor_Type'Class;
+      Canvas_Row     :    out Cursor_Ordinal;
       Update_Selected: in     Boolean := False;
       Last_Key       :    out Control_Character;
       Hotkey_Select  :    out Boolean);

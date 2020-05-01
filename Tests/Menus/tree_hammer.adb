@@ -10,7 +10,6 @@ with Curses.UI.Menus;
 with Curses.UI.Menus.Standard_Trees;
 
 with Test_Pack.Recursive_Hammer;
-with Test_Pack.Bounded_Tree;
 
 procedure Tree_Hammer is
 
@@ -35,7 +34,7 @@ begin
    TTY.Attach;
    
    declare
-      S: aliased Screen (TTY'Access);
+      S: Screen := New_Screen (TTY);
       
       Title_Cursor : Cursor := (Position => (Row    => 1,
                                              Column => S.Extents.Column / 2),
@@ -248,4 +247,6 @@ begin
       Hammer.Shutdown;
    end;
    
-end Tree_Hammer;
+   delay 10.0;
+   
+End Tree_Hammer;

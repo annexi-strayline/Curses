@@ -50,33 +50,29 @@
 with System.Storage_Elements;
 
 private with Curses.UI.Menus.Standard_Trees.Implementation;
-private with Curses.UI.Menus.Standard_Trees.Storage_Pools.Bounded;
+private with Curses.UI.Menus.Standard_Trees.Storage_Pools.Unbounded;
 
 generic
    type Base_Item is limited new Menu_Item_Interface with private;
-   Max_Items: in Positive;
-   -- The maximum number of items per tree object
+package Curses.UI.Menus.Standard_Trees.Unbounded is
    
-package Curses.UI.Menus.Standard_Trees.Bounded is
-   
-   type Bounded_Menu_Tree is limited new Standard_Tree
+   type Unbounded_Menu_Tree is limited new Standard_Tree
      with private;
    -- All Standard_Tree operations, including indexing, always refer to
    -- underlying items of Base_Item'Class
    
 private
    
-   package BSP is new Standard_Trees.Storage_Pools.Bounded
-     (Unit             => Base_Item,
-      Subpool_Capacity => Max_Items);
+   package USP renames Standard_Trees.Storage_Pools.Unbounded;
    
    -- Implementation
    
    package GTI is new Standard_Trees.Implementation.Generic_Tree
      (Base_Item      => Base_Item,
-      Subpool_Object => BSP.Bounded_Tree_Subpool);
+      Subpool_Object => USP.Unbounded_Tree_Subpool);
    
-   type Bounded_Menu_Tree is limited new GTI.Menu_Tree
+   type Unbounded_Menu_Tree is limited new GTI.Menu_Tree
      with null record;
    
-end Curses.UI.Menus.Standard_Trees.Bounded;
+   
+end Curses.UI.Menus.Standard_Trees.Unbounded;

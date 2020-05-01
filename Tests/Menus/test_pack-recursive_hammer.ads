@@ -1,5 +1,5 @@
 
-with Test_Pack.Bounded_Tree; use Test_Pack.Bounded_Tree;
+with Test_Pack.Test_Tree; use Test_Pack.Test_Tree;
 
 private with Ada.Numerics.Discrete_Random;
 
@@ -7,11 +7,11 @@ package Test_Pack.Recursive_Hammer is
    
    pragma Assertion_Policy (Check);
    
-   Hammers  : constant := 6;
-   Crunchers: constant := 2;
-   Tree_Size: constant := 1_000_000;
+   Hammers  : constant := 2;
+   Crunchers: constant := 1;
+--   Tree_Size: constant := 1_000_000;
    
-   Tree: Menu_Tree (Tree_Size);
+   Tree: Menu_Tree;
    
    type Big_Counter is mod 2**64;
    

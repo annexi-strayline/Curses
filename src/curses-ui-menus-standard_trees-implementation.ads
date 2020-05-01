@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2018-2019, ANNEXI-STRAYLINE Trans-Human Ltd.              --
+--  Copyright (C) 2018-2020, ANNEXI-STRAYLINE Trans-Human Ltd.              --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -44,102 +44,76 @@
 -- This package provides the generic logic to implement any Standard_Tree,
 -- both bounded and unbounded.
 
-private package Curses.UI.Menus.Standard_Trees.Logic is
+with System.Storage_Pools.Subpools;
+
+with Curses.UI.Menus.Standard_Trees.Storage_Pools;
+
+private package Curses.UI.Menus.Standard_Trees.Implementation is
    
    pragma Assertion_Policy (Check);
    
-   --------------------------
-   -- Generic_Tree_Element --
-   --------------------------
+   package Tree_Pools renames Curses.UI.Menus.Standard_Trees.Storage_Pools;
+   
    generic
       type Base_Item is limited new Menu_Item_Interface with private;
+      type Subpool_Object is new Tree_Pools.Tree_Subpool with private;
+   package Generic_Tree is
       
-      type Index_Type is range <>;
-      Null_Index: in Index_Type;
-      -- User-provided Tree indexing type, used for link management
+      All_Trees_Root_Pool: Tree_Pools.Standard_Trees_Root_Pool;
       
-   package Generic_Tree_Element is
       
-      protected type Element_State is
-         
+      type Menu_Tree is tagged;
+      type Tree_Access is access all Menu_Tree'Class with
+        Storage_Size => 0;
+      
+      ---------------
+      -- Menu_Item --
+      ---------------
+      
+      type Menu_Item;
+      type Item_Access is access Menu_Item with
+        Storage_Pool => All_Trees_Root_Pool;
+      
+      -- Item_Links --
+      ----------------
+      
+      protected type Item_Links is
          procedure Reset;
          -- Reset the state to the default values (initial values in the
          -- private part)
          
-         entry     Register_Reference (Success: out Boolean);
-         -- Increases the active reference count for the element, if the
-         -- element is active and has a valid Index.
+         procedure Register_Reference;
+         -- Increases the active reference count for the element
          --
-         -- If the element is not active, Register_Reference waits until the 
-         -- element has been re-activated or reset (Index returns Null_Index).
-         -- This is to ensure consistency during active deletion of large 
-         -- submenu sub-trees which may require iterative Deactivation of a 
-         -- large number of elements before deletion can be deemed safe. 
-         -- In this case, temporary Cursors should wait until this process
-         -- completes before assuming an error has occured.
-         --
-         -- If the reference cannot be registered, Success is set to False,
-         -- and the operation has no effect. The following conditions result
-         -- in Success = False:
-         --   1. Item has been Reset (Index = Null_Index)
-         --   2. Item is Active, but has already registered the maximum number
-         --      of references
-         --
-         -- Register_Reference calls can be made with timed entry calls
-         -- to protect against unlikely deadlocks. Timeouts should generally
-         -- act as if the call completed with "Success = False".
-         --
-         -- -- Suppresses All Exceptions --
-
+         -- If the element is in the reset state, Program_Error is raised.
+         -- The reference count itself is subject to the usual constraint
+         -- check on increment.
          
          procedure Deregister_Reference;
          -- Decreases the active reference count for the Element.
          --
-         -- Shall not be called on an item with a Null_Index, or that is
-         -- Deactivated.
-         --
-         -- -- Explicit Raises --
-         -- *  Program_Error: Dereigster_Reference called when the registered
-         --                   reference count is zero, or when the item is
-         --                   deactivated and/or has an Index value of
-         --                   Null_Index - all such conditions indicate a
-         --                   logical implementation error.
+         -- If the reference count is zero on entry, Program_Error is raised.
          
+         function  References return Natural;
          
-         procedure Activate;
-         procedure Deactivate (Ref_Remain: out Natural);
-         -- Activate allows new references to be registered for the Element.
-         --
-         -- If not Activated, Register_Reference does not increase the
-         -- reference count, and sets Success to False on any call to
-         -- Register_Reference.
-         --
-         -- Deactivation requires that no References currently exist.
-         -- If Ref_Remain is greator than zero, Deactivation failed, otherwise,
-         -- Ref_Remain = 0 indicates the element has been Deactivated.
-         --
-         -- Elements default to Deactivated.
-         --
-         -- -- Explicit Raises --
-         -- *  Program_Error: Activate invoked on an element that is already
-         --                   Active (this should not happen, and would
-         --                   indicate an implementation error)
+         function  Next return Item_Access;
+         function  Prev return Item_Access;
          
-         
-         function  Next return Index_Type;
-         function  Prev return Index_Type;
-         
-         procedure Next (Index: in Index_Type);
-         procedure Prev (Index: in Index_Type);
+         procedure Next (Item: in Item_Access);
+         procedure Prev (Item: in Item_Access);
+         procedure Relink (Parent, Next, Prev: in Item_Access);
          -- Linking within the branch
          
-         function  Sub_First return Index_Type;
-         function  Sub_Last  return Index_Type;
+         function  Sub_First return Item_Access;
+         function  Sub_Last  return Item_Access;
          
-         procedure Sub_First (Index: in Index_Type);
-         procedure Sub_Last  (Index: in Index_Type);
+         procedure Sub_First  (Item: in Item_Access);
+         procedure Sub_Last   (Item: in Item_Access);
+         procedure Sub_Init   (Item: in Item_Access); 
          -- Get or set the reference to the first or last element of a Branch
          -- rooted at this Element
+         --
+         -- Sub_Init sets Sub_First and Sub_Last both to Item
          
          function  Sub_Items return Natural;
          procedure Sub_Items_Increment;
@@ -148,109 +122,42 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- Manages the count of Submenu items linked from this node
          
          
-         function  Parent return Index_Type;
-         procedure Parent (Index: in Index_Type);
+         function  Parent return Item_Access;
+         procedure Parent (Item: in Item_Access);
          -- Get or set the reference to the Element which is the parent of the
          -- branch on which this Element is located.
          
-         
-         procedure Identity (Tree : in not null Standard_Tree_Access;
-                             Index: in Index_Type)
-         with Pre => Index /= Null_Index;
-         -- Set the Tree and Index of this Element
-         
-         function  Tree  return Standard_Tree_Access;
-         function  Index return Index_Type;
-         -- All newly allocated elements (through Standard_Tree.Create) shall
-         -- set Identity by providing the element with a reference to the Tree
-         -- on which it has membership, as well as its own Index values.
-         --
-         -- This identity is required by Menu_Node_Interface.Submenu
-         --
-         -- Tree and Index shall never be called on an element that has not
-         -- been properly configured with a call to Identity.
-         
       private
-         Active       : Boolean              := False;
-         Refs         : Natural              := 0;
+         Refs         : Natural     := 0;
          
-         Next_Ptr     : Index_Type           := Null_Index;
-         Prev_Ptr     : Index_Type           := Null_Index;
+         Next_Ptr     : Item_Access := null;
+         Prev_Ptr     : Item_Access := null;
          
-         Sub_First_Ptr: Index_Type           := Null_Index;
-         Sub_Last_Ptr : Index_Type           := Null_Index;
-         Sub_Count    : Natural              := 0;
+         Sub_First_Ptr: Item_Access := null;
+         Sub_Last_Ptr : Item_Access := null;
+         Sub_Count    : Natural     := 0;
          
-         Parent_Ptr   : Index_Type           := Null_Index;
-         
-         Tree_Ptr     : Standard_Tree_Access := null;
-         Self_Ptr     : Index_Type           := Null_Index;
-         
-      end Element_State;
-      
+         Parent_Ptr   : Item_Access := null;
+      end Item_Links;
       
       ----------------------------------------
-      type Tree_Element is tagged;
-      
-      
-      type Tree_Element is limited new Base_Item and Menu_Node_Interface with
+
+      type Menu_Item is limited new Base_Item and Menu_Node_Interface with
          record
-            State            : Element_State;
-            Submenu_Processor: access function 
-              (Item: in out Tree_Element'Class) return Menu_Type'Class;
+            Links: Item_Links;
+            Tree : Tree_Access := null;
+            Self : Item_Access := null;
          end record;
       
-      -- Submenu --
-      -------------
+      
       overriding
-      function  Submenu (Item: in out Tree_Element) return Menu_Type'Class
-        is (Item.Submenu_Processor (Item));
+      function  Submenu (Item: in out Menu_Item) return Menu_Type'Class;
       
-   end Generic_Tree_Element;
-   
-   
-   
-   -----------------------
-   -- Generic_Menu_Tree --
-   -----------------------
-   generic
-      with package GTE is new Generic_Tree_Element (<>);
-      
-      type Pool_Parameter is (<>);
-      type Item_Pool (Param: Pool_Parameter) is limited private;
-      
-      with function  Allocate (Pool: in out Item_Pool)
-                             return GTE.Index_Type is <>;
-      -- Shall return Null_Index is unable to allocated a new item.
-      
-      with procedure Free (Pool : in out Item_Pool;
-                           Index: in     GTE.Index_Type) is <>;
-      -- The implementation will guaruntee no further access to the item
-      -- referenced by Index after a call to Free, unless it is subsequently
-      -- returned by a later call to Allocate
-      --
-      -- Free shall not attempt to de-link the item at Index. That is handled
-      -- by this package before calling Free.
-      --
-      -- Freeing a Null_Index value shall have no effect.
-      
-      -- ** Allocate and Free do not need to be task-safe, All calls to
-      -- Allocate or Free from a Tree object will be serialized.
-      
-      with function Lookup (Pool : in out Item_Pool;
-                            Index: in     GTE.Index_Type)
-                           return Menu_Node_Reference is <>;
-      -- Return a Menu_Node_Reference to a GTE.Tree_Element'Class object
-      -- of Pool, referenced by Index. If Index is Null_Index, Reference shall
-      -- return Curses.UI.Menus.Null_Menu_Reference
-      
-   package Generic_Menu_Tree is
-      use all type GTE.Tree_Element;
       
       -----------------
       -- Menu_Cursor --
       -----------------
-      type Menu_Tree   is tagged;
+      
       type Menu_Branch is tagged;
       type Menu_Cursor is new Standard_Cursor with private;
       
@@ -261,31 +168,31 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       procedure Finalize (Cursor: in out Menu_Cursor);
       
       overriding
-      function Has_Element (Position: Menu_Cursor) return Boolean
-        with Inline;
+      function Has_Element (Position: Menu_Cursor) return Boolean;
       
       overriding
       function On_Tree (Position: in     Menu_Cursor;
                         Tree    : in out Standard_Tree'Class)
                        return Boolean
-        with Inline, Pre => Tree in Menu_Tree'Class;
+      with Inline, Pre => Tree in Menu_Tree'Class;
       
       overriding
       function On_Branch (Position: Menu_Cursor;
                           Branch  : Menu_Type'Class) 
                          return Boolean
-        with Inline, Pre => Branch in Menu_Branch'Class;
+      with Inline, Pre => Branch in Menu_Branch'Class;
       
       overriding
       function Progenitor_Of_Branch (Trial_Progenitor: Menu_Cursor;
                                      Trial_Descendent: Menu_Type'Class) 
                                     return Boolean
-        with Pre => Trial_Descendent in Menu_Branch'Class;
+      with Pre => Trial_Descendent in Menu_Branch'Class;
       
       
       -----------------
       -- Menu_Branch --
       -----------------
+      
       type Menu_Branch is new Menu_Type with private;
       -- The Menu_Branch type represents an iterable handle of a particular
       -- submenu in a particular Tree.
@@ -302,7 +209,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       function  Index (Menu  : Menu_Branch; 
                        Cursor: Menu_Cursor_Type'Class) 
                       return Menu_Node_Reference
-        with Inline, Pre => Cursor in Menu_Cursor'Class;
+      with Inline, Pre => Cursor in Menu_Cursor'Class;
       
       overriding
       function  Iterate (Menu: Menu_Branch) 
@@ -312,48 +219,42 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       function  Item_Count (Menu: Menu_Branch) return Natural;
       
       
-      No_Branch: constant Menu_Branch;
-      
       
       ---------------
       -- Menu_Tree --
       ---------------
-      type Menu_Tree (Param: Pool_Parameter) is
-        limited new Standard_Tree with private;
+      
+      type Menu_Tree is limited new Standard_Tree with private;
       
       overriding
       function Index (Tree    : in out Menu_Tree;
                       Position: in     Standard_Cursor'Class)
                      return Menu_Node_Reference
-        with Inline, Pre => Position in Menu_Cursor'Class;
+      with Inline, Pre => Position in Menu_Cursor'Class;
       
       overriding
-      function Staging_Branch (Tree: aliased in out Menu_Tree)
-                         return Menu_Type'Class
-        with Inline, Post => Staging_Branch'Result in Menu_Branch'Class;
-      
-      overriding
-      function Create (Tree: aliased in out Menu_Tree)
-                      return Standard_Cursor'Class
-        with Post => Create'Result in Menu_Cursor'Class;
+      function New_Item (Tree: aliased in out Menu_Tree)
+                        return Standard_Cursor'Class
+      with Post => New_Item'Result in Menu_Cursor'Class;
       
       overriding
       procedure Delete (Tree    : in out Menu_Tree;
-                        Position: in out Standard_Cursor'Class)
-        with Pre => Position in Menu_Cursor'Class;
+                        Position: in out Standard_Cursor'Class;
+                        Deleted :    out Boolean)
+      with Pre => Position in Menu_Cursor'Class;
       
       overriding
       procedure Append (Tree    : in out Menu_Tree;
                         Branch  : in out Menu_Type'Class;
                         Position: in out Standard_Cursor'Class)
-        with Pre => Branch in Menu_Branch'Class
+      with Pre => Branch in Menu_Branch'Class
                   and then Position in Menu_Cursor'Class;
       
       overriding
       procedure Prepend (Tree    : in out Menu_Tree;
                          Branch  : in out Menu_Type'Class;
                          Position: in out Standard_Cursor'Class)
-        with Pre => Branch in Menu_Branch'Class
+      with Pre => Branch in Menu_Branch'Class
                   and then Position in Menu_Cursor'Class;
       
       overriding
@@ -361,7 +262,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
                                Branch  : in out Menu_Type'Class;
                                Before  : in     Standard_Cursor'Class;
                                Position: in out Standard_Cursor'Class)
-        with Pre => Branch in Menu_Branch'Class
+      with Pre => Branch in Menu_Branch'Class
                   and then Before   in Menu_Cursor'Class
                   and then Position in Menu_Cursor'Class;
       -- Note that the class-wide preconditions call on On_Tree for each
@@ -373,41 +274,33 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
                               Branch  : in out Menu_Type'Class;
                               After   : in out Standard_Cursor'Class;
                               Position: in out Standard_Cursor'Class)
-        with Pre => Branch in Menu_Branch'Class
+      with Pre => Branch in Menu_Branch'Class
                   and then After    in Menu_Cursor'Class
                   and then Position in Menu_Cursor'Class;
       
    private
       
-      use type GTE.Index_Type;
-      subtype Index_Type is GTE.Index_Type;
-      
-      Null_Index: Index_Type renames GTE.Null_Index;
-      
       -----------------
       -- Menu_Cursor --
       -----------------
-      type Tree_Access is access all Menu_Tree'Class
-        with Storage_Size => 0;
       
       type Menu_Cursor is new Standard_Cursor with
          record
             Tree : Tree_Access := null;
-            Index: Index_Type  := Null_Index;
+            Item : Item_Access := null;
          end record;
       
       -----------------
       -- Menu_Branch --
       -----------------
+      
       type Menu_Branch is new Menu_Type with
          record
             Tree: Tree_Access := null;
-            Root: Index_Type  := Null_Index;
+            Root: Item_Access := null;
             -- Points to the parent element of the branch.
          end record;
       
-      
-      No_Branch: constant Menu_Branch := (Menu_Type with others => <>);
       
       ---------------
       -- Menu_Tree --
@@ -418,11 +311,6 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       -- The tree controller is used to ensure specific operations which
       -- modify the tree are executed atomically.
       protected type Tree_Controller (Our_Tree: not null access Menu_Tree) is
-         
-         -- Element Allocation --
-         ------------------------
-         procedure Allocate_Index (Index: out Index_Type);
-         procedure Free_Index     (Index: in  Index_Type);
          
          -- Element Splicing --
          ----------------------
@@ -444,35 +332,47 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
          -- These checks are implemented as Assert pragmas, and 
          -- Assertion_Error exceptions are propegated normally
          
-         procedure Extract (Item: in out GTE.Tree_Element);
-         -- Cuts Index out from it's list, setting Prev.Next -> Next and
-         -- Next.Prev -> Prev. If Index is the first item in a Submenu, that
-         -- Parent item's Submenu is retargeted to Next.
-         --
-         -- Next, Prev, and Parent are then set to Null_Index.
-         --
-         -- The item's submenu is not modified.
+         procedure Extract (Item: in not null Item_Access);
+         -- Isolates Item from whichever branch it was on. Does not affect
+         -- the submenu tree rooted at Item
          
-         procedure Insert_Before (Item  : in out GTE.Tree_Element;
-                                  Branch: in     Menu_Branch;
-                                  Before: in     Menu_Cursor);
+         procedure Allocate_Item   (Item: out not null Item_Access);
+         procedure Deallocate_Item (Item: in out Item_Access);
+         -- Allocates/Deallocates a new item from the tree's subpool.
+         --
+         -- Interestingly enough, when using an unbounded pool, the underlying
+         -- allocator is using the standard storage pool allocators via the
+         -- RTS. These calls go via an RTS lock to ensure task safety.
+         --
+         -- In the case of the unbounded pool however, we have no lock and
+         -- thus need the tree controller to force serialization of
+         -- allocations.
+         --
+         -- Since this model implies tree-specific locking, it turns out that
+         -- the unbounded tree should have better performance if there are
+         -- many trees.
+         --
+         -- Why menu trees should be changing quickly enough to bennefit from
+         -- such a fine-grained performance improvement is another story..
+                  
+         procedure Insert_Before (Item       : in not null Item_Access;
+                                  Branch_Root: in not null Item_Access;
+                                  Before_Item: in not null Item_Access);
          
-         procedure Insert_After  (Item  : in out GTE.Tree_Element;
-                                  Branch: in     Menu_Branch;
-                                  After : in     Menu_Cursor);
+         procedure Insert_After  (Item       : in not null Item_Access;
+                                  Branch_Root: in not null Item_Access;
+                                  After_Item : in not null Item_Access);
          -- Relocates From to Before/After, manipulating the links accordingly.
          -- Item is Extracted first.
          --
-         -- Before/After must be on Branch - This is rechecked with an
-         -- Assert pragma, since it may have changed since the public
-         -- precondition
+         -- Preconditions of associated Standard_Tree operations are assumed
+         -- enforced
          
+         procedure Branch_Prepend (Item       : in not null Item_Access;
+                                   Branch_Root: in not null Item_Access);
          
-         procedure Branch_Prepend (Item  : in out GTE.Tree_Element;
-                                   Branch: in     Menu_Branch);
-         
-         procedure Branch_Append (Item  : in out GTE.Tree_Element;
-                                  Branch: in     Menu_Branch);
+         procedure Branch_Append (Item       : in not null Item_Access;
+                                  Branch_Root: in not null Item_Access);
          -- Atomic operations used by Menu_Tree.Append and .Prepend
          --
          -- Calls Insert_Before with Before set to the first item Branch,
@@ -483,23 +383,19 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       end Tree_Controller;
       
       ----------------------------------------
-      type Menu_Tree (Param: Pool_Parameter) is
-        limited new Standard_Tree with
+      type Menu_Tree is limited new Standard_Tree with
          record
-            Pool      : Item_Pool (Param);
-            Controller: Tree_Controller (Menu_Tree'Access);
-            Staging   : aliased GTE.Tree_Element;
+            Controller    : Tree_Controller (Menu_Tree'Access);
+            Subpool_Actual: aliased Subpool_Object;
+            Subpool       : System.Storage_Pools.Subpools.Subpool_Handle;
          end record;
       
-      Staging_Branch_Index: Index_Type renames Null_Index;
-      -- Remember that the Staging_Branch of a given tree is a logical node. We
-      -- use a Menu_Branch with a Null_Index root to refer to the
-      -- Staging_Branch. As an extra matter of convenience, we don't need to
-      -- register references for the Staging_Branch, since it will always exist
-      -- as long as the Tree exists, and it cannot be deleted.
-      --
-      -- Though a Menu_Branch is functionally similar to a Menu_Cursor, unlike
-      -- a cursor, it can never be directly deleted.
+      overriding
+      procedure Initialize (Tree: in out Menu_Tree);
+      
+      overriding
+      procedure Finalize (Tree: in out Menu_Tree);
+      -- Deallocates Subpool_Actual
       
       
       --
@@ -512,7 +408,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       function Index (Tree    : in out Menu_Tree;
                       Position: in     Standard_Cursor'Class)
                      return Menu_Node_Reference
-        is (Lookup (Pool => Tree.Pool, Index => Menu_Cursor (Position).Index));
+        is ((Ref => Menu_Cursor(Position).Item));
       -- Note the type conversion is protected by the Precondition
       
       
@@ -520,7 +416,7 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       -----------------
       overriding
       function Has_Element (Position: Menu_Cursor) return Boolean
-        is (Position.Tree /= null and then Position.Index /= Null_Index);
+        is (Position.Tree /= null and then Position.Item /= null);
       
       overriding
       function On_Tree (Position: in     Menu_Cursor;
@@ -532,25 +428,18 @@ private package Curses.UI.Menus.Standard_Trees.Logic is
       function On_Branch (Position: Menu_Cursor;
                           Branch  : Menu_Type'Class) 
                          return Boolean
-        is (GTE.Tree_Element (Position.Tree.all(Position).Ref.all).State.Parent
+        is (Menu_Item (Position.Tree.all(Position).Ref.all).Links.Parent
               = Menu_Branch(Branch).Root);
       
       
       -- Menu_Branch --
       -----------------
-      overriding
       function  Index (Menu  : Menu_Branch; 
                        Cursor: Menu_Cursor_Type'Class) 
                       return Menu_Node_Reference
         is (Menu.Tree.Index (Menu_Cursor (Cursor)));
       
-      overriding
-      function Staging_Branch (Tree: aliased in out Menu_Tree)
-                              return Menu_Type'Class
-        is (Menu_Branch'(Menu_Type with
-                         Tree => Tree'Access, Root => Staging_Branch_Index));
       
-      
-   end Generic_Menu_Tree;
+   end Generic_Tree;
    
-end Curses.UI.Menus.Standard_Trees.Logic;
+end Curses.UI.Menus.Standard_Trees.Implementation;

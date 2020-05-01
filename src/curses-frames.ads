@@ -65,6 +65,7 @@ package Curses.Frames is
    -----------
    type Frame (<>) is limited new Surface with private;
    
+   not overriding
    function  New_Frame (Target          : not null access Surface'Class;
                         Top_Left        : in Cursor_Position;
                         Proposed_Extents: in Cursor_Position)
@@ -77,7 +78,7 @@ package Curses.Frames is
    -- as not Available.
    -- -- Suppresses All Exceptions --
    
-   
+   not overriding
    procedure Reframe (The_Frame       : in out Frame;
                       Top_Left        : in     Cursor_Position;
                       Proposed_Extents: in     Cursor_Position);
@@ -100,14 +101,21 @@ package Curses.Frames is
    -- In case of any Exception, Frame is made not Available, but no other
    -- changes are made.
    
+   not overriding
+   function Top_Left (The_Frame: in out Frame) return Cursor_Position;
+   -- Returns the position of the Top_Left of the Frame with respect to the
+   -- Target Surface
+   
    
    -- Cursor Handling --
    ---------------------
+   not overriding
    procedure Assert_Cursor (The_Frame: in out Frame);
    -- Forces the Target Surface's Current_Cursor to match the actual position
    -- and style of the Frame's Current_Cursor. Fails silently.
    -- -- Suppresses All Exceptions --
    
+   not overriding
    procedure Auto_Assert_Cursor (The_Frame: in out Frame;
                                  Set      : in     Boolean := True);
    -- If set to True, Assert_Cursor is invoked any time the Current_Cursor is
@@ -116,6 +124,7 @@ package Curses.Frames is
    -- The default setting is True
    -- -- Suppresses All Exceptions --
    
+   not overriding
    procedure Derive_Cursor (The_Frame: in out Frame);
    -- Sets the Frame's Current_Cursor to match the position and style of the
    -- Target Surface's Current_Cursor. If the Target's Current_Cursor is not

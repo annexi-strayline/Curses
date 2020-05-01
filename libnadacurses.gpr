@@ -46,7 +46,8 @@ library project libnadacurses is
          for Source_Dirs use (Source_Base, Source_Base & "/Wide_Support");
          Wide_Def := "-D__NADACURSES_WIDE_SUPPORT";
       when "NO" =>
-         for Source_Dirs use (Source_Base, Source_Base & "/No_Wide_Support");
+         for Source_Dirs use (Source_Base, Source_Base & "/No_Wide_Support",
+         "./Tests/Debug_Harness");
    end case;
 
    -- Under construction

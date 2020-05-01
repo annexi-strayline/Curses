@@ -192,9 +192,11 @@ package body Curses.UI.Menus.Renderer is
    ----------------------
    -- Interaction_Loop --
    ----------------------
+   
    procedure Interaction_Loop 
      (Driver         : in out Menu_Renderer;
       Selected_Item  :    out Menu_Cursor_Type'Class;
+      Canvas_Row     :    out Cursor_Ordinal;
       Update_Selected: in     Boolean := False;
       Last_Key       :    out Control_Character;
       Hotkey_Select  :    out Boolean)
@@ -445,9 +447,11 @@ package body Curses.UI.Menus.Renderer is
                   Selected => False);
             end;
             
-            Selected_Item := New_Selection;
+
             Driver.Selected_Row := Cursor_Ordinal 
               (Natural (Nominal_Row) - Driver.Scroll_Offset);
+            Canvas_Row    := Driver.Selected_Row;
+            Selected_Item := New_Selection;
             
             declare 
                Row_Canvas: Frame'Class := Frame_Row (Driver.Selected_Row);
@@ -470,7 +474,8 @@ package body Curses.UI.Menus.Renderer is
             -- Scroll_Offset
             Driver.Scroll_Offset := Natural (Nominal_Row) - 1;
             Driver.Selected_Row  := 1;
-            Selected_Item := New_Selection;
+            Canvas_Row           := Driver.Selected_Row;
+            Selected_Item        := New_Selection;
             Render_All;
             
          elsif Nominal_Row > Bottom_Nominal then
@@ -486,8 +491,9 @@ package body Curses.UI.Menus.Renderer is
             -- Scroll_Offset = (Norminal_Row) - Frame_Extents.Row
             Driver.Scroll_Offset 
               := Natural (Nominal_Row - Driver.Canvas_Extents.Row);
-            Driver.Selected_Row  := Driver.Canvas_Extents.Row;
-            Selected_Item := New_Selection;
+            Driver.Selected_Row := Driver.Canvas_Extents.Row;
+            Canvas_Row          := Driver.Selected_Row;
+            Selected_Item       := New_Selection;
             Render_All;
             
          end if;
@@ -528,10 +534,12 @@ package body Curses.UI.Menus.Renderer is
          return;
       end Select_With_Hotkey;
       
+   --------------------------------------------------
    begin
       Selected_Item := Iterator.First;
-      -- We need this as a starting point in all cases, but this also ensures
-      -- that we initialize this before we try to use it.
+      Canvas_Row    := 1;
+      -- We need Selected_Item as a starting point in all cases, but this also 
+      -- ensures that we initialize these before we try to use it.
       
       -- Check for changes to Canvas or Branch which should trigger
       -- a reset

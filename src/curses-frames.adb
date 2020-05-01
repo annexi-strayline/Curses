@@ -186,10 +186,11 @@ package body Curses.Frames is
    ---------------
    -- New_Frame --
    ---------------
-   function  New_Frame (Target          : not null access Surface'Class;
-                        Top_Left        : in Cursor_Position;
-                        Proposed_Extents: in Cursor_Position)
-                       return Frame
+   not overriding
+   function New_Frame (Target          : not null access Surface'Class;
+                       Top_Left        : in Cursor_Position;
+                       Proposed_Extents: in Cursor_Position)
+                      return Frame
    is
    begin
       return New_Frame: Frame (Target) do
@@ -208,6 +209,7 @@ package body Curses.Frames is
    -------------
    -- Reframe --
    -------------
+   not overriding
    procedure Reframe (The_Frame       : in out Frame;
                       Top_Left        : in     Cursor_Position;
                       Proposed_Extents: in     Cursor_Position)
@@ -266,10 +268,20 @@ package body Curses.Frames is
       
    end Reframe;
    
+   --------------
+   -- Top_Left --
+   --------------
+   not overriding
+   function Top_Left (The_Frame: in out Frame) return Cursor_Position is
+   begin
+      return The_Frame.State.Target_TL;
+   end Top_Left;
+   
    
    -------------------
    -- Assert_Cursor --
    -------------------
+   not overriding
    procedure Assert_Cursor (The_Frame: in out Frame) is
    begin
       if not The_Frame.Available or else not The_Frame.Target.Available then
@@ -293,6 +305,7 @@ package body Curses.Frames is
    ------------------------
    -- Auto_Assert_Cursor --
    ------------------------
+   not overriding
    procedure Auto_Assert_Cursor (The_Frame: in out Frame;
                                  Set      : in     Boolean := True)
    is
@@ -304,6 +317,7 @@ package body Curses.Frames is
    -------------------
    -- Derive_Cursor --
    -------------------
+   not overriding
    procedure Derive_Cursor (The_Frame: in out Frame) is
    begin
       if not The_Frame.Available or else not The_Frame.Target.Available then

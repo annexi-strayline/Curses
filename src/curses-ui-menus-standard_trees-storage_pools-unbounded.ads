@@ -41,42 +41,40 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
--- This package provides a standard implementation Standard_Tree with bounded
--- storage.
---
--- Refer to the parent Standart_Trees package for a full interface listing of
--- the Standard_Tree interface.
-
-with System.Storage_Elements;
-
-private with Curses.UI.Menus.Standard_Trees.Implementation;
-private with Curses.UI.Menus.Standard_Trees.Storage_Pools.Bounded;
-
-generic
-   type Base_Item is limited new Menu_Item_Interface with private;
-   Max_Items: in Positive;
-   -- The maximum number of items per tree object
+package Curses.UI.Menus.Standard_Trees.Storage_Pools.Unbounded is
    
-package Curses.UI.Menus.Standard_Trees.Bounded is
+   type Unbounded_Tree_Subpool is new Tree_Subpool with private;
    
-   type Bounded_Menu_Tree is limited new Standard_Tree
-     with private;
-   -- All Standard_Tree operations, including indexing, always refer to
-   -- underlying items of Base_Item'Class
+   overriding
+   function Initialize_Subpool
+     (Subpool  : aliased in out Unbounded_Tree_Subpool;
+      Root_Pool:         in out Standard_Trees_Root_Pool'Class)
+     return not null Subpool_Handle;
+
+   overriding
+   procedure Subpool_Allocate
+     (Subpool                 : in out Unbounded_Tree_Subpool;
+      Storage_Address         :    out Address;
+      Size_In_Storage_Elements: in     Storage_Count;
+      Alignment               : in     Storage_Count);
+   
+   overriding
+   procedure Subpool_Deallocate (Subpool: in out Unbounded_Tree_Subpool;
+                                 Tag    : in out Allocation_Tag_Access);
+   
+   overriding 
+   procedure Subpool_Purge (Subpool: in out Unbounded_Tree_Subpool);
    
 private
    
-   package BSP is new Standard_Trees.Storage_Pools.Bounded
-     (Unit             => Base_Item,
-      Subpool_Capacity => Max_Items);
+   type Unbounded_Tree_Subpool is new Tree_Subpool with
+      record
+         Deallocation_Chain_Head: aliased Allocation_Tag (Dynamic);
+         -- Acts a the sentinal node in a circular doubly-linked list
+         -- of all outstanding allocations associated with this
+         -- subpool. Unchecked_Deallocate_Subpool causes all items in
+         -- this list to be explicitly deallocated
+      end record;
    
-   -- Implementation
+end Curses.UI.Menus.Standard_Trees.Storage_Pools.Unbounded;
    
-   package GTI is new Standard_Trees.Implementation.Generic_Tree
-     (Base_Item      => Base_Item,
-      Subpool_Object => BSP.Bounded_Tree_Subpool);
-   
-   type Bounded_Menu_Tree is limited new GTI.Menu_Tree
-     with null record;
-   
-end Curses.UI.Menus.Standard_Trees.Bounded;

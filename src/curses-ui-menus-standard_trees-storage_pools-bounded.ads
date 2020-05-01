@@ -5,7 +5,7 @@
 --                                                                          --
 -- ------------------------------------------------------------------------ --
 --                                                                          --
---  Copyright (C) 2019, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
+--  Copyright (C) 2020, ANNEXI-STRAYLINE Trans-Human Ltd.                   --
 --  All rights reserved.                                                    --
 --                                                                          --
 --  Original Contributors:                                                  --
@@ -41,56 +41,48 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-package body Curses.UI.Menus.Standard_Trees.Bounded is
+generic
+   type Unit is limited private;
+   Subpool_Capacity: in Positive;
+package Curses.UI.Menus.Standard_Trees.Storage_Pools.Bounded is
    
-   --------------
-   -- Allocate --
-   --------------
-   function  Allocate (Pool: in out Item_Pool) return Index_Type is
-      New_Item_Index: Index_Type;
-   begin
-      
-      if Pool.Recycle_List /= Null_Index then
-         -- Always Recycle first.
-         New_Item_Index := Pool.Recycle_List;
-         
-         -- Move the next item up
-         Pool.Recycle_List := Pool.Data(Pool.Recycle_List).State.Next;
-         
-      elsif Pool.Next_Fresh /= Null_Index then
-         New_Item_Index := Pool.Next_Fresh;
-         
-         if Pool.Next_Fresh < Pool.Capacity then
-            Pool.Next_Fresh := Pool.Next_Fresh + 1;
-         else
-            Pool.Next_Fresh := Null_Index;
-         end if;
-         
-      else
-         -- No new indexes available.
-         New_Item_Index := Null_Index;
-      end if;
-      
-      return New_Item_Index;
-   end Allocate;
+   type Bounded_Tree_Subpool is new Tree_Subpool with private;
    
-   ----------
-   -- Free --
-   ----------
-   procedure Free (Pool : in out Item_Pool;
-                   Index: in     Index_Type)
-   is begin
-      
-      -- We are required to explicitly ignore Null_Index values
-      if Index = Null_Index then
-         return;
-      end if;
-      
-      -- We always prepend freed items 
-      Pool.Data(Index).State.Next (Pool.Recycle_List);
-      Pool.Recycle_List := Index;
-      -- The list is always linked forwards only
-   end Free;
+   overriding
+   procedure Subpool_Allocate
+     (Subpool                 : in out Bounded_Tree_Subpool;
+      Storage_Address         :    out Address;
+      Size_In_Storage_Elements: in     Storage_Count;
+      Alignment               : in     Storage_Count);
    
-end Curses.UI.Menus.Standard_Trees.Bounded;
+   overriding
+   procedure Subpool_Deallocate (Subpool: in out Bounded_Tree_Subpool;
+                                 Tag    : in out Allocation_Tag_Access);
    
+   overriding 
+   procedure Subpool_Purge (Subpool: in out Bounded_Tree_Subpool) is null;
+   -- No need to purge the bounded subpool type since all storage is physically
+   -- allocated within the subpool object itself
+   
+private
+   
+   subtype Allocation_Block is Storage_Array
+     (1 .. 
+        (Unit'Max_Size_In_Storage_Elements * 2)
+        + (Allocation_Tag_Access'Max_Size_In_Storage_Elements * 2)
+        + (Allocation_Tag'Max_Size_In_Storage_Elements * 2));
+
+   
+   subtype Valid_Block_Index is Positive range 1 .. Subpool_Capacity;
+   
+   type Allocation_Pool is array (Valid_Block_Index) of Allocation_Block;
+   
+   type Bounded_Tree_Subpool is new Tree_Subpool with
+      record
+         Allocations: Allocation_Pool;
+         Next_Fresh : Valid_Block_Index := 1;
+         
+         Recycle_Stack: Allocation_Tag_Access;
+      end record;
+   
+end Curses.UI.Menus.Standard_Trees.Storage_Pools.Bounded;

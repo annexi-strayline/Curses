@@ -9,10 +9,12 @@ with Curses.Device.Environment;
 
 with Curses.UI.Menus; use Curses.UI.Menus;
 with Curses.UI.Menus.Renderer;
+with Curses.UI.Menus.Renderer.Cascade;
 with Curses.UI.Menus.Standard_Trees; use Curses.UI.Menus.Standard_Trees;
-with Curses.UI.Menus.Standard_Trees.Bounded;
+with Curses.UI.Menus.Standard_Trees.Unbounded;
 
 with Ada.Text_IO;
+with Ada.Exceptions;
 with Debug; use Debug;
 
 procedure Menu_Test is
@@ -20,10 +22,35 @@ procedure Menu_Test is
    package Int_IO is new Ada.Text_IO.Integer_IO (Integer);
    
    
+   function Frame_And_Style 
+     (On_Screen    : aliased in out Screen'Class;
+      Root_Item    :         in     Menu_Cursor_Type'Class;
+      Frame_Extents:         in     Cursor_Position;
+      TL_Hint      :         in     Cursor_Position)
+     return Framed_Window'Class 
+   is begin
+      return FW: Framed_Window'Class 
+          := New_Framed_Window (On_Screen      => On_Screen,
+                                Top_Padding    => 1,
+                                Bottom_Padding => 1,
+                                Left_Padding   => 1,
+                                Right_Padding  => 1,
+                                Frame_Extents  => Frame_Extents)
+      do
+         FW.Set_Border;
+      end return;
+   end Frame_And_Style;
+   
+   
+   procedure Open_Menu is new Curses.UI.Menus.Renderer.Cascade
+     (Frame_And_Style => Frame_And_Style);
+   
+   
    type Menu_Item is limited new Curses.UI.Menus.Menu_Item_Interface with
       record
          Label : String (1 .. 20) := (others => ' ');
          Hotkey: Control_Character := (Class => No_Key, others => <>);
+         Has_Submenu: Boolean := False;
       end record;
    
    overriding
@@ -48,6 +75,14 @@ procedure Menu_Test is
                          return Cursor_Ordinal
      is (20);
    
+
+   
+   overriding
+   function Hot_Key (Item: Menu_Item) 
+                    return Curses.Terminals.Surfaces.Control_Character
+     is (Item.Hotkey);
+   
+   
    overriding
    procedure Render_Label (Item    : in out Menu_Item;
                            Canvas  : in out Surface'Class;
@@ -59,40 +94,44 @@ procedure Menu_Test is
       
       if Selected then
          Use_Cursor.Style.Inverted := True;
+         Canvas.Fill (Pattern     => " ",
+                      Fill_Cursor => Use_Cursor);
          Canvas.Position_Cursor ((1,1));
       end if;
       
-      Canvas.Fill (Pattern => " ",
-                   Fill_Cursor => Use_Cursor);
-
-      
       Canvas.Put (Set_Cursor => Use_Cursor,
                   Content    => Item.Label);
+      
+      if Item.Has_Submenu then
+         Use_Cursor.Position.Column := Canvas.Extents.Column;
+         Canvas.Put (Set_Cursor => Use_Cursor,
+                     Content    => ">");
+      end if;
+      
    end Render_Label;
    
-   overriding
-   function Hot_Key (Item: Menu_Item) 
-                    return Curses.Terminals.Surfaces.Control_Character
-     is (Item.Hotkey);
    
    overriding
    procedure Execute (Item     : in out Menu_Item;
                       Directive:    out After_Execute_Directive)
    is
    begin
-      Directive := Close_Tree;
+      if Item.Has_Submenu then
+         Directive := Open_Submenu;
+      else
+         Directive := Close_Tree;
+      end if;
    end Execute;
    
    
-   package Menu_Trees is new Curses.UI.Menus.Standard_Trees.Bounded
+   package Menu_Trees is new Curses.UI.Menus.Standard_Trees.Unbounded
      (Menu_Item);
    
-   Tree: Menu_Trees.Bounded_Menu_Tree (25);
+   Tree: Menu_Trees.Unbounded_Menu_Tree;
    
 
    
    TTY: aliased Terminal (Curses.Device.Environment.Environment_Terminal);
-   
    
    
 begin
@@ -100,7 +139,8 @@ begin
    TTY.Attach;
    
    declare
-      Staging: aliased Menu_Type'Class := Tree.Staging_Branch;
+      Root_Node: Standard_Cursor'Class := Tree.New_Item;
+      Staging: aliased Menu_Type'Class := Tree(Root_Node).Submenu;
       
       S: aliased Screen (TTY'Access);
 
@@ -109,87 +149,55 @@ begin
       S.Put (Content => "Initializing Menu...",
              Advance_Cursor => True);
       
-      for I in 1 .. 20 loop
+      for I in 1 .. 10 loop
          declare
-            Cursor: Standard_Cursor'Class := Tree.Create;
+            Cursor: Standard_Cursor'Class := Tree.New_Item;
          begin
             declare
-               New_Item: Menu_Item renames
-                 Menu_Item (Staging(Cursor).Ref.all);
+               New_Item: Menu_Item renames Menu_Item (Tree(Cursor).Ref.all);
+               Target_Branch: Menu_Type'Class := Tree(Cursor).Submenu;
             begin
                New_Item.Label (1 .. 4) := "Item";
-               Int_IO.Put (To   => New_Item.Label (5 .. New_Item.Label'Last),
+               New_Item.Has_Submenu := True;
+               Int_IO.Put (To   => New_Item.Label (5 .. New_Item.Label'Last - 1),
                            Item => I);
                
                New_Item.Hotkey 
                  := (Class => Graphic, Alt => False, Key => Character'Val (I + 96));
+               
+               Tree.Append (Branch   => Staging,
+                            Position => Cursor);
+               
+               for I in 1 .. 10 loop
+                  -- Make submenu
+                  declare
+                     Sub_Cursor: Standard_Cursor'Class := Tree.New_Item;
+                     
+                  begin
+                     declare
+                        Sub_Item: Menu_Item renames
+                          Menu_Item (Tree(Sub_Cursor).Ref.all);
+                     begin
+                        Sub_Item.Label (1 .. 3) := "Sub";
+                     end;
+                     Tree.Append (Branch   => Target_Branch,
+                                  Position => Sub_Cursor);
+                  end;
+               end loop;
             end;
          end;
       end loop;
       
+      
       S.Put (Content => "OK",
              Advance_Cursor => True);
       
-      declare
-
-         
---         FW: Framed_Window := New_Window (S, (1,1), (10,60));
---         FW: Framed_Window := New_Window (S, (1,1), (10,60));
-
-         FW: Framed_Window := New_Framed_Window 
-           (On_Screen => S,
-            Top_Padding => 1,
-            Bottom_Padding => 1,
-            Left_Padding => 2,
-              Right_Padding => 2,
-            Frame_Extents => (Row => 10, Column => 60));
-         
-         F: aliased Frame'Class := FW.Get_Frame;
-         
-
-         
-         M_Style: Cursor := (Style  => (Inverted => True, others => False),
-                             others => <>);
-         B_Style: Cursor := (others => <>);
-      begin
-         FW.Set_Border;
-         FW.Show;
-         
-         declare
-            R: Curses.UI.Menus.Renderer.Menu_Renderer
-              (Canvas        => F'Access,
-               Input_Surface => FW'Access,
-               Branch        => Staging'Access);
-            
-            Itr: Menu_Iterators.Reversible_Iterator'Class := Staging.Iterate;
-            S_Item: Menu_Cursor_Type'Class := Itr.First;
-            Key: Control_Character;
-            HK_Sel: Boolean;
-         begin
-            R.Enable_Wrap_Around;
-            R.Enable_Scrollbar (Marker_Style     => M_Style,
-                                Marker_Character => ' ',
-                                Bar_Style        => B_Style,
-                                Bar_Character    => ' ');
-            
-            
-            loop
-               R.Interaction_Loop (Selected_Item => S_Item,
-                                   Last_Key => Key,
-                                   Hotkey_Select => HK_Sel);
-               
-               if Key.Class in graphic and then Key.Key = 'M' then
-                  FW.Move ((1,1));
-               end if;
-               
-               exit when not HK_Sel
-                 and then Key.Class = Graphic
-                 and then Key.Key in 'q' | 'Q';
-            end loop;
-         end;
-      end;
-      
+      Open_Menu (On_Screen => S,
+                 Branch    => Staging);
       
    end;
    
+exception
+   when e: others =>
+      Debug_Line (Ada.Exceptions.Exception_Information (e));
 end Menu_Test;

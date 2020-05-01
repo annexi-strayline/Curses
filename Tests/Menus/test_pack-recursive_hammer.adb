@@ -1,5 +1,6 @@
 
 with Ada.Exceptions; use Ada;
+with Ada.Assertions;
 
 with Curses.UI.Menus;
 with Curses.UI.Menus.Standard_Trees;
@@ -7,6 +8,9 @@ with Curses.UI.Menus.Standard_Trees;
 with Debug; use Debug;
 
 package body Test_Pack.Recursive_Hammer is
+   
+   procedure Assert (Check: in Boolean; Message: in String)
+     renames Ada.Assertions.Assert;
    
    -----------------
    -- Total_Stack --
@@ -57,6 +61,8 @@ package body Test_Pack.Recursive_Hammer is
       Our_Index        : Positive;
       Kill_Order       : Boolean := False;
       
+      Deleted          : Boolean;
+      
       procedure Inc (N: in out Big_Counter) with Inline is
       begin
          N := N + 1;
@@ -74,7 +80,7 @@ package body Test_Pack.Recursive_Hammer is
       procedure Recurse_Branch (Root          : in out Standard_Cursor'Class;
                                 Last_Directive:    out Random_Directive)
       is
-         This_Branch : Menu_Type'Class       := Tree(Root).Submenu;
+         This_Branch : Menu_Type'Class       := Tree.Index(Root).Submenu;
          Current_Item: Standard_Cursor'Class := Tree.New_Item;
          
       begin
@@ -156,7 +162,11 @@ package body Test_Pack.Recursive_Hammer is
                   elsif Last_Directive = Delete_Current_Branch then
                      -- We are executing the "Delete_Current_Branch" directive
                      -- on behalf of the branch we just came back from.
-                     Tree.Delete (Current_Item);
+                     Tree.Delete (Position => Current_Item,
+                                  Deleted  => Deleted);
+                     Assert (Check   => Deleted,
+                             Message => "Delete branch failed");
+                     
                      Inc (Stats.Deleted_Branches);
                      Inc (Stats.Deleted_Nodes);
                      
@@ -170,7 +180,8 @@ package body Test_Pack.Recursive_Hammer is
                   -- Otherwise, we just keep going as we were
                
                when Delete_Current_Item =>
-                  Tree.Delete (Current_Item);
+                  Tree.Delete (Position => Current_Item, Deleted => Deleted);
+                  Assert (Check => Deleted, Message => "Deletion failed");
                   Inc (Stats.Deleted_Nodes);
                   
                   Current_Item := Tree.New_Item;
@@ -223,7 +234,8 @@ package body Test_Pack.Recursive_Hammer is
             -- "Delete_Current_Branch" when refering to the Root branch, or is
             -- "Delete_All", both are logicially equivilient
             
-            Tree.Delete (Root_Node);
+            Tree.Delete (Position => Root_Node, Deleted => Deleted);
+            Assert (Check => Deleted, Message => "Delete tree failed");
             
             select
                accept Kill;
@@ -234,11 +246,10 @@ package body Test_Pack.Recursive_Hammer is
          end loop;
       end;
       
-      
    exception
       when e: others =>
-         Debug_Line ("Hammer " & Positive'Image (Our_Index) & ": " & 
-                       Exceptions.Exception_Information (e));
+         Debug_Line ("Hammer EX: " & Exceptions.Exception_Information (e));
+      
    end Hammer;
    
    
@@ -288,12 +299,7 @@ package body Test_Pack.Recursive_Hammer is
                
          end loop Main_Loop;
       end;
-   exception
-      when e: others =>
-         Debug_Line ("Group Cruncher " & 
-                       Positive'Image (Group_First) & " -" &
-                       Positive'Image (Group_Last) & ": " &
-                       Exceptions.Exception_Information (e));
+
    end Group_Cruncher;
    
    
@@ -360,9 +366,7 @@ package body Test_Pack.Recursive_Hammer is
          end select;
          
       end loop Main_Loop;
-   exception
-      when e: others =>
-         Debug_Line ("Totalizer: " & Exceptions.Exception_Information (e));
+
    end Totalizer;
    
    
